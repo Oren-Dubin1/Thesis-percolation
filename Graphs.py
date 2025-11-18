@@ -1,0 +1,102 @@
+import networkx as nx
+import itertools
+
+class PercolationGraph(nx.Graph):
+    def __init__(self, base_graph=None, **kwargs):
+        super().__init__(**kwargs)
+        if base_graph:
+            self.add_nodes_from(base_graph.nodes(data=True))
+            self.add_edges_from(base_graph.edges(data=True))
+
+    def is_k222_minus_subgraph(self, missing_edge, node_set):
+        """Check whether the subgraph induced by node_set is a K_{2,2,2} minus the missing edge."""
+        nodes = list(node_set)
+        for A in itertools.combinations(nodes, 2):
+            rest = [v for v in nodes if v not in A]
+            for B in itertools.combinations(rest, 2):
+                C = [v for v in rest if v not in B]
+                # Generate all cross-part edges
+                cross_edges = set(itertools.product(A, B)) | \
+                              set(itertools.product(A, C)) | \
+                              set(itertools.product(B, C))
+                cross_edges = {tuple(sorted(e)) for e in cross_edges}
+
+                if tuple(sorted(missing_edge)) not in cross_edges:
+                    continue
+
+                required_edges = cross_edges - {tuple(sorted(missing_edge))}
+                if all(self.has_edge(*e) for e in required_edges):
+                    return True
+        return False
+
+    def is_k222_percolating(self):
+        """Simulate K_{2,2,2} percolation closure."""
+        G = self.copy()
+        nodes = list(G.nodes())
+        n = len(nodes)
+
+        all_edges = {tuple(sorted(e)) for e in itertools.combinations(nodes, 2)}
+
+        changed = True
+        while changed:
+            changed = False
+            current_edges = {tuple(sorted(e)) for e in G.edges()}
+            missing_edges = all_edges - current_edges
+
+            for u, v in missing_edges:
+                for S in itertools.combinations(nodes, 6):
+                    if u not in S or v not in S:
+                        continue
+                    subgraph = PercolationGraph(G.subgraph(S))
+                    if subgraph.is_k222_minus_subgraph((u, v), S):
+                        G.add_edge(u, v)
+                        changed = True
+                        break
+                if changed:
+                    break
+
+        return G.number_of_edges() == n * (n - 1) // 2
+
+
+    def is_k5_minus_subgraph(self, missing_edge, node_set):
+        """Check if the subgraph induced by node_set is a K_5 minus missing_edge."""
+        if len(node_set) < 5:
+            return False
+        for subset in itertools.combinations(node_set, 5):
+            sub = self.subgraph(subset)
+            if sub.number_of_edges() == 9 and not sub.has_edge(*missing_edge):
+                return True
+        return False
+
+    def is_k5_percolating(self):
+        """Simulate K_5 percolation closure."""
+        G = self.copy()
+        nodes = list(G.nodes())
+        n = len(nodes)
+
+        all_possible_edges = {tuple(sorted(e)) for e in itertools.combinations(nodes, 2)}
+
+        changed = True
+        while changed:
+            changed = False
+            current_edges = {tuple(sorted(e)) for e in G.edges()}
+            missing_edges = all_possible_edges - current_edges
+
+            for u, v in missing_edges:
+                for S in itertools.combinations(nodes, 5):
+                    if u not in S or v not in S:
+                        continue
+                    if G.subgraph(S).number_of_edges() == 9 and not G.has_edge(u, v):
+                        G.add_edge(u, v)
+                        changed = True
+                        break
+                if changed:
+                    break
+
+        return G.number_of_edges() == n * (n - 1) // 2
+
+    def print_graph(self, file=None):
+        for i in range(self.number_of_nodes()):
+            print(i, file=file)
+        for e in self.edges():
+            print(*e, file=file)

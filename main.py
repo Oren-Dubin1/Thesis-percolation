@@ -4,6 +4,24 @@ from networkx.generators.atlas import graph_atlas_g
 import sys
 import contextlib
 
+def all_graphs_leq_n_nodes(n):
+    """Generate all unlabeled graphs on <= n vertices (brute force, for small n)."""
+    from itertools import combinations, product
+
+    for node_num in range(1, n+1):
+        nodes = list(range(node_num))
+        edges = list(combinations(nodes, 2))
+        total_graphs = 2 ** len(edges)
+
+        for bits in range(total_graphs):
+            G = nx.Graph()
+            G.add_nodes_from(nodes)
+            for i, edge in enumerate(edges):
+                if (bits >> i) & 1:
+                    G.add_edge(*edge)
+            yield G
+
+        print(f"Finished Generating all graphs on {node_num} edges.")
 
 def is_k222_minus_subgraph(supergraph, missing_edge, node_set):
     nodes = list(node_set)
@@ -63,11 +81,13 @@ def print_graph(G, file=None):
         print(*e,file=file)
 
 
-def check_vertex_graphs_with_degree3_extension(num_edges=6):
+def check_vertex_graphs_with_degree3_extension(num_nodes=6):
     with open('out1.txt', 'w') as f:
         graphs = graph_atlas_g()
-        G6 = [nx.convert_node_labels_to_integers(G) for G in graphs if G.number_of_nodes() == num_edges]
-        G6 = [G for G in G6 if G.number_of_edges() >= 3 * num_edges-6]  # Based on the conjecture
+        G6 = [nx.convert_node_labels_to_integers(G) for G in graphs if G.number_of_nodes() == num_nodes]
+        # G6 = [G for G in G6 if G.number_of_edges() >= 3 * num_nodes-6]  # Based on the conjecture
+
+        # G6 = list(all_graphs_leq_n_nodes(num_nodes))
         total = 0
         percolating = 0
 
@@ -76,7 +96,7 @@ def check_vertex_graphs_with_degree3_extension(num_edges=6):
 
             for neighbor_set in itertools.combinations(base_nodes, 3):
                 G_ext = G.copy()
-                new_node = num_edges
+                new_node = num_nodes
                 # print(f'new_node={new_node}')
                 G_ext.add_node(new_node)
                 for v in neighbor_set:
@@ -86,21 +106,20 @@ def check_vertex_graphs_with_degree3_extension(num_edges=6):
                 if is_k222_percolating(G_ext):
                     percolating += 1
                     # Check if G without the added vertex is percolating
-                    G_ext.remove_node(new_node)
-                    if not is_k222_percolating(G_ext):
-                        print('--------------------------------------------', file=f)
-                        G_ext.add_node(new_node)
-                        for v in neighbor_set:
-                            G_ext.add_edge(new_node, v)
-                        print_graph(G_ext, f)
+                    # G_ext.remove_node(new_node)
+                    # if not is_k222_percolating(G_ext):
+                    # G_ext.add_node(new_node)
+                    # for v in neighbor_set:
+                    #     G_ext.add_edge(new_node, v)
+                    print('--------------------------------------------', file=f)
+                    print_graph(G_ext, f)
 
-            if i % 10 == 0:
+            if i % 50 == 0:
                 print(f"Processed {i+1}/{len(G6)} base graphs...")
 
         print(f"\nTotal 7-vertex graphs (degree-3 extension): {total}")
         print(f"Percolating graphs: {percolating}")
         print(f"Non-percolating graphs: {total - percolating}")
-
 
 
 if __name__ == '__main__':

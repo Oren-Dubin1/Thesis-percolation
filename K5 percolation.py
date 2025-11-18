@@ -80,16 +80,16 @@ class TestPercolating:
         # Test 1: K5 minus one edge – should percolate
         G1 = nx.complete_graph(5)
         G1.remove_edge(0, 1)
-        assert is_k5_percolating(G1) == True, "Test 1 Failed: K5^- should percolate"
+        assert self.is_k5_percolating(G1) == True, "Test 1 Failed: K5^- should percolate"
 
         # Test 2: Disconnected graph – should not percolate
         G2 = nx.Graph()
         G2.add_nodes_from(range(5))
-        assert is_k5_percolating(G2) == False, "Test 2 Failed: Empty graph shouldn't percolate"
+        assert self.is_k5_percolating(G2) == False, "Test 2 Failed: Empty graph shouldn't percolate"
 
         # Test 3: K5 – already complete
         G3 = nx.complete_graph(5)
-        assert is_k5_percolating(G3) == True, "Test 3 Failed: K5 is trivially percolating"
+        assert self.is_k5_percolating(G3) == True, "Test 3 Failed: K5 is trivially percolating"
 
         G4 = nx.complete_graph(5)
         G4.remove_edge(0, 1)
@@ -99,7 +99,7 @@ class TestPercolating:
         G4.add_edge(2, 5)
         G4.add_edge(3, 5)
 
-        assert is_k5_percolating(G4), "Test 4 Failed: G4 is percolating"
+        assert self.is_k5_percolating(G4), "Test 4 Failed: G4 is percolating"
 
         print("Basic unit tests passed ✅")
 
@@ -132,7 +132,7 @@ class TestPercolating:
         with open("test_input.txt", "w") as f:
             f.write(mock_input)
 
-        graphs = parse_graphs_from_file("test_input.txt")
+        graphs = self.parse_graphs_from_file("test_input.txt")
         assert len(graphs) == 2, "Parsing Failed: Expected 2 graphs"
 
         g0 = graphs[0]
