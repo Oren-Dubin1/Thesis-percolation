@@ -31,6 +31,7 @@ class PercolationGraph(nx.Graph):
 
     def is_k222_percolating(self):
         """Simulate K_{2,2,2} percolation closure."""
+        assert self.number_of_nodes() >= 6
         G = self.copy()
         nodes = list(G.nodes())
         n = len(nodes)
@@ -100,3 +101,4 @@ class PercolationGraph(nx.Graph):
             print(i, file=file)
         for e in self.edges():
             print(*e, file=file)
+

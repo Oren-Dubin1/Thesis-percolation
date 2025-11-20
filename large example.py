@@ -4,13 +4,27 @@ import networkx as nx
 import numpy as np
 
 import main
+from Graphs import PercolationGraph
 from main import print_graph, is_k222_percolating
+import Graphs
 
 
 class CreateLargeGraph:
-    def __init__(self, n : int, init_graph : nx.Graph):
+    def __init__(self, n : int, init_graph : Graphs.PercolationGraph):
         self.n = n
-        self.graph = init_graph  # Must be K222 percolating
+        self.graph = PercolationGraph(init_graph)  # Must be K222 percolating
+
+
+    def decide_vertices_to_connect(self, edge):
+        assert 0 <= edge <= self.graph.number_of_edges()
+
+        #check if G - e percolates
+        G = PercolationGraph(self.graph).copy()
+        G.remove_edge(*edge)
+        if is_k222_percolating(G):
+            return G.nodes[0], G.nodes[1], G.nodes[2]
+
+
 
 
     def enlarge(self):
@@ -32,7 +46,7 @@ class CreateLargeGraph:
                 self.graph.add_node(w)
                 self.graph.add_edges_from([(w, u), (w, v), (w, a), (w, b)])
 
-                if main.is_k222_percolating(self.graph):
+                if self.graph.is_k222_percolating():
                     found = True
                     break  # Success, graph is now enlarged
 
@@ -44,23 +58,29 @@ class CreateLargeGraph:
                 self.graph.add_edge(u, v)
 
 
-class Test_create:
-    def test(self):
-        G = nx.complete_multipartite_graph(2,2,2)
+class TestCreate:
+    def test_enlarge(self):
+        G = PercolationGraph(nx.complete_multipartite_graph(2,2,2))
         G.remove_edge(0,2)
         G.add_edge(0,1)
         assert is_k222_percolating(G), "Initial Graph not percolating"
 
-        creator = CreateLargeGraph(12, G)
+        creator = CreateLargeGraph(10, G)
         creator.enlarge()
         assert is_k222_percolating(creator.graph), "Final Graph not percolating"
         print_graph(creator.graph)
 
+    def test_decide_vertices_to_connect(self):
+        G = PercolationGraph(nx.complete_multipartite_graph(2,2,2))
+        G.add_edge(0,1)
+        G.add_edge(2,3)
+        print(G)
+
 
 
 if __name__ == '__main__':
-    test = Test_create()
-    test.test()
+    test = TestCreate()
+    test.test_enlarge()
 
 
 
