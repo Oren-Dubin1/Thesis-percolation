@@ -41,23 +41,23 @@ class TestPercolationGraph(unittest.TestCase):
         PG.add_edges_from([(0, 1), (1, 2), (2, 3)])  # A sparse path
         self.assertFalse(PG.is_k222_percolating())
 
-    def test_is_k5_percolating(self):
+    def test_is_k222_percolating_with_optional_tracking(self):
         # Test 1: K5 minus one edge – should percolate
         G1 = nx.complete_graph(5)
         G1.remove_edge(0, 1)
         G1 = PercolationGraph(G1)
-        assert G1.is_k5_percolating() == True, "Test 1 Failed: K5^- should percolate"
+        assert G1.is_k5_percolating(), "Test 1 Failed: K5^- should percolate"
 
         # Test 2: Disconnected graph – should not percolate
         G2 = nx.Graph()
         G2.add_nodes_from(range(5))
         G2 = PercolationGraph(G2)
-        assert G2.is_k5_percolating() == False, "Test 2 Failed: Empty graph shouldn't percolate"
+        assert not G2.is_k5_percolating(), "Test 2 Failed: Empty graph shouldn't percolate"
 
         # Test 3: K5 – already complete
         G3 = nx.complete_graph(5)
         G3 = PercolationGraph(G3)
-        assert G3.is_k5_percolating() == True, "Test 3 Failed: K5 is trivially percolating"
+        assert G3.is_k5_percolating(), "Test 3 Failed: K5 is trivially percolating"
 
         G4 = nx.complete_graph(5)
         G4.remove_edge(0, 1)
@@ -70,7 +70,36 @@ class TestPercolationGraph(unittest.TestCase):
 
         assert G4.is_k5_percolating(), "Test 4 Failed: G4 is percolating"
 
-        print("Basic unit tests passed ✅")
+        G5 = nx.complete_multipartite_graph(2, 2, 2)
+        PG = PercolationGraph(G5)
+        PG.add_edge(0, 1)
+        answer, step = PG.is_k222_percolating_with_optional_tracking((0, 1))
+        assert PG.is_k5_percolating()
+        assert answer, "Test 5 Failed: K_222^+ should percolate"
+        # print("Basic unit tests passed ✅")
+
+    def test_again_is_k222_perc(self):
+        G = nx.Graph()
+        G.add_nodes_from(range(10))
+        G.add_edges_from([
+            (0, 3), (0, 4), (0, 5), (0, 6), (0, 8), (0, 9),
+    (1, 3), (1, 4), (1, 5), (1, 6), (1, 8), (1, 9),
+    (2, 4), (2, 5), (2, 6), (2, 7),
+    (3, 4), (3, 5), (3, 7), (3, 8),
+    (4, 6), (4, 9),
+    (7, 8), (7, 9),
+    (10, 0), (10, 1), (10, 2), (10, 5), (10,4)
+])
+        PG = PercolationGraph(G)
+        answer, step = PG.is_k222_percolating_with_optional_tracking((0, 3))
+        print(f'step={step}')
+        self.assertTrue(answer)
+
+    def test_init(self):
+        G = nx.Graph()
+        G.add_edges_from([(0, 1), (1, 2)])
+        PG = PercolationGraph(G)
+        self.assertEqual(list(PG.edges()), [(0,1),(1,2)])  # Output: [(0, 1), (1, 2)]
 
 
 if __name__ == '__main__':

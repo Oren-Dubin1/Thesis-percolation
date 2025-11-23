@@ -1,4 +1,5 @@
 import itertools
+import unittest
 
 import networkx as nx
 import numpy as np
@@ -10,19 +11,22 @@ import Graphs
 
 
 class CreateLargeGraph:
-    def __init__(self, n : int, init_graph : Graphs.PercolationGraph):
+    def __init__(self, n: int, init_graph: Graphs.PercolationGraph):
         self.n = n
         self.graph = PercolationGraph(init_graph)  # Must be K222 percolating
-
 
     def decide_vertices_to_connect(self, edge):
         assert 0 <= edge <= self.graph.number_of_edges()
 
-        #check if G - e percolates
+        # check if G - e percolates
         G = PercolationGraph(self.graph).copy()
         G.remove_edge(*edge)
         if is_k222_percolating(G):
             return G.nodes[0], G.nodes[1], G.nodes[2]
+
+
+
+
 
 
 
@@ -58,11 +62,11 @@ class CreateLargeGraph:
                 self.graph.add_edge(u, v)
 
 
-class TestCreate:
+class TestCreate(unittest.TestCase):
     def test_enlarge(self):
-        G = PercolationGraph(nx.complete_multipartite_graph(2,2,2))
-        G.remove_edge(0,2)
-        G.add_edge(0,1)
+        G = PercolationGraph(nx.complete_multipartite_graph(2, 2, 2))
+        G.remove_edge(0, 2)
+        G.add_edge(0, 1)
         assert is_k222_percolating(G), "Initial Graph not percolating"
 
         creator = CreateLargeGraph(10, G)
@@ -71,19 +75,11 @@ class TestCreate:
         print_graph(creator.graph)
 
     def test_decide_vertices_to_connect(self):
-        G = PercolationGraph(nx.complete_multipartite_graph(2,2,2))
-        G.add_edge(0,1)
-        G.add_edge(2,3)
+        G = PercolationGraph(nx.complete_multipartite_graph(2, 2, 2))
+        G.add_edge(0, 1)
+        G.add_edge(2, 3)
         print(G)
 
 
-
 if __name__ == '__main__':
-    test = TestCreate()
-    test.test_enlarge()
-
-
-
-
-
-
+    unittest.main()

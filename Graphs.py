@@ -1,12 +1,12 @@
 import networkx as nx
 import itertools
 
+
 class PercolationGraph(nx.Graph):
     def __init__(self, base_graph=None, **kwargs):
         super().__init__(**kwargs)
-        if base_graph:
-            self.add_nodes_from(base_graph.nodes(data=True))
-            self.add_edges_from(base_graph.edges(data=True))
+        if base_graph is not None:
+            self.update(base_graph)
 
     def is_k222_minus_subgraph(self, missing_edge, node_set):
         """Check whether the subgraph induced by node_set is a K_{2,2,2} minus the missing edge."""
@@ -31,7 +31,7 @@ class PercolationGraph(nx.Graph):
 
     def is_k222_percolating(self):
         """Simulate K_{2,2,2} percolation closure."""
-        assert self.number_of_nodes() >= 6
+        if self.number_of_nodes() < 6: return False
         G = self.copy()
         nodes = list(G.nodes())
         n = len(nodes)
@@ -58,6 +58,58 @@ class PercolationGraph(nx.Graph):
 
         return G.number_of_edges() == n * (n - 1) // 2
 
+    def is_k222_percolating_with_optional_tracking(self, tracked_edge=None):
+        if self.number_of_nodes() < 6: return False
+        G = PercolationGraph(base_graph=self).copy()
+        if tracked_edge is not None and G.has_edge(*tracked_edge):
+            G.remove_edge(*tracked_edge)
+        n = G.number_of_nodes()
+        nodes = list(G.nodes())
+
+        def all_edges(nodelist):
+            return set(tuple(sorted(e)) for e in itertools.combinations(nodelist, 2))
+
+        step_counter = 0
+        tracked_step = None
+        changed = True
+        added = False
+
+        while changed:
+            changed = False
+            current_edges = set(tuple(sorted(e)) for e in G.edges())
+            missing_edges = list(all_edges(nodes) - current_edges)
+
+            # If tracking an edge, defer its addition to the end
+            if tracked_edge is not None:
+                tracked_edge_sorted = tuple(sorted(tracked_edge))
+                if tracked_edge_sorted in missing_edges:
+                    missing_edges.remove(tracked_edge_sorted)
+                    missing_edges.append(tracked_edge_sorted)
+            else:
+                tracked_edge_sorted = None
+
+            for u, v in missing_edges:
+                candidate = G.copy()
+                candidate.add_edge(u, v)
+
+                for S in itertools.combinations(nodes, 6):
+                    if u not in S or v not in S:
+                        continue
+                    if candidate.is_k222_minus_subgraph((u, v), S):
+                        G.add_edge(u, v)
+                        step_counter += 1
+                        changed = True
+                        break
+
+                if changed:
+                    break
+            if not changed and not added:
+                G.add_edge(*tracked_edge)
+                added = True
+                tracked_step = step_counter
+                changed = True
+
+        return G.number_of_edges() == n * (n - 1) // 2, tracked_step
 
     def is_k5_minus_subgraph(self, missing_edge, node_set):
         """Check if the subgraph induced by node_set is a K_5 minus missing_edge."""
@@ -101,4 +153,3 @@ class PercolationGraph(nx.Graph):
             print(i, file=file)
         for e in self.edges():
             print(*e, file=file)
-

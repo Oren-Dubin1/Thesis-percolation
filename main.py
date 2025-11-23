@@ -78,7 +78,7 @@ def print_graph(G, file=None):
     for i in range(len(G.nodes())):
         print(i, file=file)
     for e in G.edges():
-        print(*e,file=file)
+        print(*e, file=file)
 
 
 def check_vertex_graphs_with_degree3_extension(num_nodes=6):
