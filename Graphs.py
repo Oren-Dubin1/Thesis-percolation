@@ -127,3 +127,72 @@ class PercolationGraph(nx.Graph):
             print(i, file=file)
         for e in self.edges():
             print(*e, file=file)
+
+
+
+    def find_k222_without_two_edges(self, edge):
+        """
+        Find a 6-node set S such that:
+          – S contains both endpoints of `edge`
+          – the induced subgraph on S is a K_{2,2,2} minus exactly TWO cross edges,
+                one of which MUST be `edge`.
+
+        Return:
+          A new graph H induced by S, with the tracked edge ADDED BACK
+          and ONLY the other missing edge kept absent.
+
+          So H is a K_{2,2,2}^- with *the other* missing edge.
+        """
+        u, v = tuple(sorted(edge))
+        nodes = list(self.nodes())
+        remaining = [x for x in nodes if x not in (u, v)]
+
+        for subset4 in itertools.combinations(remaining, 4):
+            S = {u, v, *subset4}
+            S_list = list(S)
+
+            for A in itertools.combinations(S_list, 2):
+                rem1 = [x for x in S_list if x not in A]
+                for B in itertools.combinations(rem1, 2):
+                    C = [x for x in rem1 if x not in B]
+
+                    # Build all 12 cross edges of K2,2,2
+                    cross_edges = (
+                            set(itertools.product(A, B)) |
+                            set(itertools.product(A, C)) |
+                            set(itertools.product(B, C))
+                    )
+                    cross_edges = {tuple(sorted(e)) for e in cross_edges}
+
+                    # Which cross edges are missing in the original graph?
+                    missing = {e for e in cross_edges
+                               if not self.has_edge(*e)}
+
+                    if len(missing) != 2:
+                        continue
+
+                    # Must contain the tracked edge
+                    if (u, v) not in missing:
+                        continue
+
+                    # Identify the OTHER missing cross-edge
+                    missing_other = [e for e in missing if e != (u, v)][0]
+
+                    # -------------------------
+                    # BUILD CORRECTED SUBGRAPH
+                    # -------------------------
+
+                    H = PercolationGraph(nx.Graph())
+                    H.add_nodes_from(S)
+
+                    # Add ALL cross-edges EXCEPT `missing_other`
+                    for e in cross_edges:
+                        if e == missing_other:
+                            continue  # keep this one absent
+                        H.add_edge(*e)
+
+                    # Now H is K2,2,2 minus ONLY missing_other
+                    assert H.number_of_edges() == 11
+                    return H, missing_other
+
+        return None, None

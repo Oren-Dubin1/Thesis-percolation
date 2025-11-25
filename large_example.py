@@ -3,6 +3,7 @@ import unittest
 
 import networkx as nx
 import numpy as np
+from jinja2.nodes import Assign
 
 import main
 from Graphs import PercolationGraph
@@ -58,56 +59,6 @@ class CreateLargeGraph:
             raise "Found percolating graph on < 3n-6 edges."
 
 
-    def find_k222_without_two_edges(self, edge):
-        """
-        Find a 6-node set S such that:
-          – S contains both endpoints of `edge`
-          – the induced subgraph on S is a K_{2,2,2} minus exactly TWO cross edges,
-                one of which must be `edge`.
-        Returns:
-            (S, missing_edges_set) or None
-        """
-
-        u, v = tuple(sorted(edge))
-        nodes = list(self.graph.nodes())
-
-        # Only 6-sets containing u and v
-        remaining = [x for x in nodes if x not in (u, v)]
-
-        for subset4 in itertools.combinations(remaining, 4):
-            S = {u, v, *subset4}
-            S_list = list(S)
-
-            # Enumerate all 2,2,2 partitions of six nodes
-            for A in itertools.combinations(S_list, 2):
-                rem1 = [x for x in S_list if x not in A]
-                for B in itertools.combinations(rem1, 2):
-                    C = [x for x in rem1 if x not in B]
-
-                    # Compute the 12 cross edges once
-                    cross_edges = (
-                            set(itertools.product(A, B)) |
-                            set(itertools.product(A, C)) |
-                            set(itertools.product(B, C))
-                    )
-                    cross_edges = {tuple(sorted(e)) for e in cross_edges}
-
-                    # which cross edges are missing?
-                    missing = {e for e in cross_edges if not self.graph.has_edge(*e)}
-
-                    # We need exactly two missing cross edges
-                    if len(missing) != 2:
-                        continue
-
-                    # One of them must be the tracked edge
-                    if (u, v) not in missing:
-                        continue
-
-                    missing.remove(edge)
-                    return S, missing
-
-        return None
-
     @staticmethod
     def get_opposite(subgraph, node, edge_to_add=None):
         assert subgraph.number_of_nodes() == 6
@@ -116,29 +67,93 @@ class CreateLargeGraph:
         if edge_to_add: comp.remove_edge(*edge_to_add)
         return next(comp.neighbors(node))
 
+    def decide_vertices_to_connect_one_outer_one_inner(self, subgraph, u,v,x,y):
+        # Assuming u is outer
+        assert subgraph.has_edge(u, x) and subgraph.has_edge(u, y)  # u is outer
+        if subgraph.has_edge(v, x):
+            node = x
+        elif subgraph.has_edge(v, y):
+            node = y
+
+        else:
+            subgraph.print_graph()
+            raise AssertionError
+
+        return u, node, self.get_opposite(subgraph, u), self.get_opposite(subgraph, node)
+
+
+    def decide_vertices_to_connect_both_inner(self, subgraph, u,v,x,y):
+        outer = list(set(range(6)) - {u,v,x,y})
+        return u, self.get_opposite(subgraph, u), outer[0], outer[1]
+
+    def decide_vertices_to_connect_special_outer(self, subgraph, u,v,x,y):
+        return u,v, self.get_opposite(subgraph, u), self.get_opposite(subgraph, v)
+
+    def decide_vertices_to_connect_special_inner(self, subgraph, u,v,x,y):
+        if v != x and v != y:  # v is inner
+            u,v = v,u
+        # u is inner
+        return tuple(set(range(6)) - {u, self.get_opposite(subgraph, u)})
+
 
     def decide_vertices_to_connect(self, edge):
         # By assumption - G-e does not percolate. G does percolate
         assert edge in self.graph.edges()
-
+        graph = self.graph.copy()
+        graph.remove_edge(*edge)
+        subgraph, f = graph.find_k222_without_two_edges(edge)
+        # if subgraph is None:  # No K222^{--} in the graph with edge being one of the missing edges
+        #     print(edge)
+        #     graph.print_graph()
+        assert subgraph is not None
+        assert f is not None
         u,v = edge
-        S, f = self.find_k222_without_two_edges(edge)
-        S = list(S)
-        subgraph = self.graph.subgraph(S)
+        x,y = f
+        # assert u != x and u != y and v != x and v != y
         # First case in the proof - (u,v)
+        assert subgraph.degree[x] == 3 and subgraph.degree[y] == 3
         if subgraph.degree[u] == 4 and subgraph.degree[v] == 4:
-            pass
+            if subgraph.has_edge(u, x) and subgraph.has_edge(u,y): # u is outer
+                return self.decide_vertices_to_connect_one_outer_one_inner(subgraph, u,v,x,y)
+
+            elif subgraph.has_edge(v, x) and subgraph.has_edge(v,y): # v is outer
+                return self.decide_vertices_to_connect_one_outer_one_inner(subgraph, v,u,x,y)
+
+            else:
+                return self.decide_vertices_to_connect_both_inner(subgraph, u,v,x,y)
+
+        else:
+            if subgraph.has_edge(v, x) and subgraph.has_edge(v,y) or subgraph.has_edge(u, x) and subgraph.has_edge(u, y):
+                return self.decide_vertices_to_connect_special_outer(subgraph, u,v,x,y)
+            else:
+                return self.decide_vertices_to_connect_special_inner(subgraph, u,v,x,y)
+
+
 
 
     def smart_enlarge(self):
         while self.graph.number_of_nodes() < self.n:
             print(f'current number of nodes={self.graph.number_of_nodes()}')
-            edge_to_remove = np.random.choice(self.graph.edges)
-            self.check_conjecture_3n_6(edge_to_remove)  # Along the way check
+
+            assert self.graph.number_of_edges() == 3 * self.graph.number_of_nodes() - 6
+            edges = list(self.graph.edges)
+            idx = np.random.randint(len(edges))
+            edge_to_remove = edges[idx]
+
+            # self.check_conjecture_3n_6(edge_to_remove)  # Along the way check
 
             vertices_to_connect = self.decide_vertices_to_connect(edge_to_remove)
+
+            self.graph.remove_edge(*edge_to_remove)
             new_node = self.graph.number_of_nodes()
             self.graph.add_node(new_node)
             self.graph.add_edges_from([(new_node, vertex) for vertex in vertices_to_connect])
-            assert self.graph.is_k222_percolating()  # Only for testing - remove after
+            assert self.graph.number_of_edges() == 3 * self.graph.number_of_nodes() - 6
+
+            self.graph.print_graph()
+
+            # assert self.graph.is_k222_percolating()  # Only for testing - remove after
+            if not self.graph.is_k222_percolating():
+                # self.graph.print_graph()
+                raise AssertionError
 

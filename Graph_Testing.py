@@ -126,6 +126,34 @@ class TestPercolationGraph(unittest.TestCase):
 
         print(G.is_k222_percolating())
 
+    def test_find_k222_without_two_edges(self):
+        G = PercolationGraph(nx.complete_multipartite_graph(2, 2, 2))
+        G.remove_edge(0, 2)
+        G.remove_edge(0,3)
+        G.add_nodes_from([6,7])
+        G.add_edges_from([(6,1),(6,2),(6,4), (7,6), (7,4), (7,2), (0,1)])
+
+        S, edge = G.find_k222_without_two_edges((0,2))
+        self.assertTrue(S.is_k222_minus_subgraph(edge, S.nodes))
+        self.assertEqual(edge, (0,3))
+
+        G = PercolationGraph(nx.complete_multipartite_graph(2, 2, 2))
+        G.remove_edge(0, 2)
+        G.remove_edge(0,3)
+        S, edge = G.find_k222_without_two_edges((0,2))
+        self.assertTrue(S.is_k222_minus_subgraph(edge, S.nodes))
+
+        G = PercolationGraph(nx.Graph())
+        G.add_edges_from([
+            (0, 3), (0, 4), (0, 5), (0, 1), (0, 6),
+            (1, 2), (1, 4), (1, 5), (1, 6), (1, 7),
+            (2, 4), (2, 5), (2, 6),
+            (3, 4), (3, 6)
+        ])
+        S, f = G.find_k222_without_two_edges((0,5))
+        assert S is None
+
+
 
 
 if __name__ == '__main__':
