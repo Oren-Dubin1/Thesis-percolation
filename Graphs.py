@@ -29,64 +29,32 @@ class PercolationGraph(nx.Graph):
                     return True
         return False
 
-    def is_k222_percolating(self):
-        """Simulate K_{2,2,2} percolation closure."""
-        if self.number_of_nodes() < 6: return False
-        G = self.copy()
-        nodes = list(G.nodes())
-        n = len(nodes)
+    @staticmethod
+    def change_missing_edges(missing_edges, tracked_edge):
+        # If tracking an edge, defer its addition to the end
+        if tracked_edge is not None:
+            tracked_edge_sorted = tuple(sorted(tracked_edge))
+            if tracked_edge_sorted in missing_edges:
+                missing_edges.remove(tracked_edge_sorted)
+                missing_edges.append(tracked_edge_sorted)
+        return missing_edges
 
-        all_edges = {tuple(sorted(e)) for e in itertools.combinations(nodes, 2)}
 
-        changed = True
-        while changed:
-            changed = False
-            current_edges = {tuple(sorted(e)) for e in G.edges()}
-            missing_edges = all_edges - current_edges
-
-            for u, v in missing_edges:
-                for S in itertools.combinations(nodes, 6):
-                    if u not in S or v not in S:
-                        continue
-                    subgraph = PercolationGraph(G.subgraph(S))
-                    if subgraph.is_k222_minus_subgraph((u, v), S):
-                        G.add_edge(u, v)
-                        changed = True
-                        break
-                if changed:
-                    break
-
-        return G.number_of_edges() == n * (n - 1) // 2
-
-    def is_k222_percolating_with_optional_tracking(self, tracked_edge=None):
+    def is_k222_percolating(self, return_final_graph=False):
         if self.number_of_nodes() < 6: return False
         G = PercolationGraph(base_graph=self).copy()
-        if tracked_edge is not None and G.has_edge(*tracked_edge):
-            G.remove_edge(*tracked_edge)
         n = G.number_of_nodes()
         nodes = list(G.nodes())
 
         def all_edges(nodelist):
             return set(tuple(sorted(e)) for e in itertools.combinations(nodelist, 2))
 
-        step_counter = 0
-        tracked_step = None
         changed = True
-        added = False
 
         while changed:
             changed = False
             current_edges = set(tuple(sorted(e)) for e in G.edges())
             missing_edges = list(all_edges(nodes) - current_edges)
-
-            # If tracking an edge, defer its addition to the end
-            if tracked_edge is not None:
-                tracked_edge_sorted = tuple(sorted(tracked_edge))
-                if tracked_edge_sorted in missing_edges:
-                    missing_edges.remove(tracked_edge_sorted)
-                    missing_edges.append(tracked_edge_sorted)
-            else:
-                tracked_edge_sorted = None
 
             for u, v in missing_edges:
                 candidate = G.copy()
@@ -95,21 +63,27 @@ class PercolationGraph(nx.Graph):
                 for S in itertools.combinations(nodes, 6):
                     if u not in S or v not in S:
                         continue
-                    if candidate.is_k222_minus_subgraph((u, v), S):
+                    if PercolationGraph(candidate).is_k222_minus_subgraph((u, v), S):
                         G.add_edge(u, v)
-                        step_counter += 1
                         changed = True
                         break
 
                 if changed:
                     break
-            if not changed and not added:
-                G.add_edge(*tracked_edge)
-                added = True
-                tracked_step = step_counter
-                changed = True
 
-        return G.number_of_edges() == n * (n - 1) // 2, tracked_step
+        if return_final_graph:
+            return G.number_of_edges() == n * (n - 1) // 2,  G
+        return G.number_of_edges() == n * (n - 1) // 2
+
+    def is_k_222_percolating_without_edge(self, tracked_edge, return_final_graph=False):
+        G = PercolationGraph(base_graph=self).copy()
+        G.remove_edge(*tracked_edge)
+        if return_final_graph:
+            answer, graph = G.is_k222_percolating(return_final_graph=True)
+            return answer, graph
+
+        answer = G.is_k222_percolating(return_final_graph=False)
+        return answer
 
     def is_k5_minus_subgraph(self, missing_edge, node_set):
         """Check if the subgraph induced by node_set is a K_5 minus missing_edge."""

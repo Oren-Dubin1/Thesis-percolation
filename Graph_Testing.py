@@ -1,7 +1,10 @@
 import unittest
+import time
 import networkx as nx
 from Graphs import PercolationGraph
 from main import print_graph
+import numpy as np
+
 
 
 class TestPercolationGraph(unittest.TestCase):
@@ -41,7 +44,7 @@ class TestPercolationGraph(unittest.TestCase):
         PG.add_edges_from([(0, 1), (1, 2), (2, 3)])  # A sparse path
         self.assertFalse(PG.is_k222_percolating())
 
-    def test_is_k222_percolating_with_optional_tracking(self):
+    def test_is_k222_percolating(self):
         # Test 1: K5 minus one edge – should percolate
         G1 = nx.complete_graph(5)
         G1.remove_edge(0, 1)
@@ -73,7 +76,7 @@ class TestPercolationGraph(unittest.TestCase):
         G5 = nx.complete_multipartite_graph(2, 2, 2)
         PG = PercolationGraph(G5)
         PG.add_edge(0, 1)
-        answer, step = PG.is_k222_percolating_with_optional_tracking((0, 1))
+        answer = PG.is_k222_percolating((0, 1))
         assert PG.is_k5_percolating()
         assert answer, "Test 5 Failed: K_222^+ should percolate"
         # print("Basic unit tests passed ✅")
@@ -91,15 +94,38 @@ class TestPercolationGraph(unittest.TestCase):
     (10, 0), (10, 1), (10, 2), (10, 5), (10,4)
 ])
         PG = PercolationGraph(G)
-        answer, step = PG.is_k222_percolating_with_optional_tracking((0, 3))
-        print(f'step={step}')
+        answer = PG.is_k222_percolating((0, 3))
         self.assertTrue(answer)
+
 
     def test_init(self):
         G = nx.Graph()
         G.add_edges_from([(0, 1), (1, 2)])
         PG = PercolationGraph(G)
         self.assertEqual(list(PG.edges()), [(0,1),(1,2)])  # Output: [(0, 1), (1, 2)]
+
+    def test_is_k_222_percolating_without_edge(self):
+        G = nx.complete_multipartite_graph(2, 2, 2)
+        G = PercolationGraph(G)
+        G.add_edge(0, 1)
+        G.add_node(6)
+        G.add_edge(0, 6)
+        G.add_edge(1, 6)
+        G.add_edge(2, 6)
+        answer, graph = G.is_k_222_percolating_without_edge((0,6), return_final_graph=True)
+        self.assertFalse(answer)
+        self.assertEqual(graph.number_of_edges(), 17)
+        self.assertEqual(graph.number_of_nodes(), 7)
+
+    def test_is_k_222_percolating_large_example(self):
+        G = nx.complete_graph(2)
+        G = PercolationGraph(G)
+        for edge in G.edges():
+            if np.random.random() < 0.5:
+                G.remove_edge(*edge)
+
+        print(G.is_k222_percolating())
+
 
 
 if __name__ == '__main__':
