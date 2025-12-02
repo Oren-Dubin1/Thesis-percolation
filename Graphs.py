@@ -129,8 +129,7 @@ class PercolationGraph(nx.Graph):
             print(*e, file=file)
 
 
-
-    def find_k222_without_two_edges(self, edge):
+    def find_k222_without_two_edges(self, edge, induced=True):
         """
         Find a 6-node set S such that:
           – S contains both endpoints of `edge`
@@ -168,15 +167,22 @@ class PercolationGraph(nx.Graph):
                     missing = {e for e in cross_edges
                                if not self.has_edge(*e)}
 
-                    if len(missing) != 2:
+                    if induced and len(missing) != 2:
                         continue
 
+                    if not induced and len(missing) > 2:
+                        continue
                     # Must contain the tracked edge
                     if (u, v) not in missing:
                         continue
 
                     # Identify the OTHER missing cross-edge
-                    missing_other = [e for e in missing if e != (u, v)][0]
+                    try:
+                        missing_other = [e for e in missing if e != (u, v)][0]
+                    except IndexError:  # In case the graph is full
+                        missing_other = [e for e in cross_edges if e != (u, v)][0]
+                        if induced:
+                            raise IndexError
 
                     # -------------------------
                     # BUILD CORRECTED SUBGRAPH

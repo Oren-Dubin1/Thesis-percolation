@@ -44,7 +44,7 @@ class TestPercolationGraph(unittest.TestCase):
         PG.add_edges_from([(0, 1), (1, 2), (2, 3)])  # A sparse path
         self.assertFalse(PG.is_k222_percolating())
 
-    def test_is_k222_percolating(self):
+    def test_is_k5_percolating(self):
         # Test 1: K5 minus one edge – should percolate
         G1 = nx.complete_graph(5)
         G1.remove_edge(0, 1)
@@ -117,14 +117,14 @@ class TestPercolationGraph(unittest.TestCase):
         self.assertEqual(graph.number_of_edges(), 17)
         self.assertEqual(graph.number_of_nodes(), 7)
 
-    def test_is_k_222_percolating_large_example(self):
-        G = nx.complete_graph(2)
-        G = PercolationGraph(G)
-        for edge in G.edges():
-            if np.random.random() < 0.5:
-                G.remove_edge(*edge)
-
-        print(G.is_k222_percolating())
+    # def test_is_k_222_percolating_large_example(self):
+    #     G = nx.complete_graph(2)
+    #     G = PercolationGraph(G)
+    #     for edge in G.edges():
+    #         if np.random.random() < 0.5:
+    #             G.remove_edge(*edge)
+    #
+    #     print(G.is_k222_percolating())
 
     def test_find_k222_without_two_edges(self):
         G = PercolationGraph(nx.complete_multipartite_graph(2, 2, 2))
@@ -151,9 +151,45 @@ class TestPercolationGraph(unittest.TestCase):
             (3, 4), (3, 6)
         ])
         S, f = G.find_k222_without_two_edges((0,5))
-        assert S is None
+        self.assertIsNone(S)
 
+        G = PercolationGraph(nx.complete_graph(10))
+        S, f = G.find_k222_without_two_edges((0,1))
+        self.assertIsNone(f)
+        self.assertIsNone(S)
 
+    def test_find_k222_without_two_edges_non_induced(self):
+        G = PercolationGraph(nx.complete_multipartite_graph(2, 2, 2))
+        G.remove_edge(0, 2)
+        G.remove_edge(0,3)
+        G.add_nodes_from([6,7])
+        G.add_edges_from([(6,1),(6,2),(6,4), (7,6), (7,4), (7,2), (0,1)])
+
+        S, edge = G.find_k222_without_two_edges((0,2), False)
+        self.assertTrue(S.is_k222_minus_subgraph(edge, S.nodes))
+        self.assertEqual(edge, (0,3))
+
+        G = PercolationGraph(nx.complete_multipartite_graph(2, 2, 2))
+        G.remove_edge(0, 2)
+        G.remove_edge(0,3)
+        S, edge = G.find_k222_without_two_edges((0,2))
+        self.assertTrue(S.is_k222_minus_subgraph(edge, S.nodes))
+
+        G = PercolationGraph(nx.Graph())
+        G.add_edges_from([
+            (0, 3), (0, 4), (0, 5), (0, 1), (0, 6),
+            (1, 2), (1, 4), (1, 5), (1, 6), (1, 7),
+            (2, 4), (2, 5), (2, 6),
+            (3, 4), (3, 6)
+        ])
+        S, f = G.find_k222_without_two_edges((0,5), False)
+        self.assertIsNone(S)
+
+        G = PercolationGraph(nx.complete_graph(10))
+        G.remove_edge(0,1)
+        S, f = G.find_k222_without_two_edges((0,1), False)
+        self.assertEqual(f, (2,4))
+        self.assertEqual(S.number_of_edges(), 11)
 
 
 if __name__ == '__main__':

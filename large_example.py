@@ -65,7 +65,8 @@ class CreateLargeGraph:
 
         comp = nx.complement(subgraph)
         if edge_to_add: comp.remove_edge(*edge_to_add)
-        return next(comp.neighbors(node))
+        neighbor = next(comp.neighbors(node))
+        return neighbor
 
     def decide_vertices_to_connect_one_outer_one_inner(self, subgraph, u,v,x,y):
         # Assuming u is outer
@@ -93,7 +94,7 @@ class CreateLargeGraph:
         if v != x and v != y:  # v is inner
             u,v = v,u
         # u is inner
-        return tuple(set(range(6)) - {u, self.get_opposite(subgraph, u)})
+        return tuple(subgraph.nodes - {u, self.get_opposite(subgraph, u)})
 
 
     def decide_vertices_to_connect(self, edge):
@@ -101,10 +102,11 @@ class CreateLargeGraph:
         assert edge in self.graph.edges()
         graph = self.graph.copy()
         graph.remove_edge(*edge)
-        subgraph, f = graph.find_k222_without_two_edges(edge)
+        subgraph, f = graph.find_k222_without_two_edges(edge, induced=False)  # Problem lies here.
         # if subgraph is None:  # No K222^{--} in the graph with edge being one of the missing edges
         #     print(edge)
         #     graph.print_graph()
+
         assert subgraph is not None
         assert f is not None
         u,v = edge
@@ -128,32 +130,46 @@ class CreateLargeGraph:
             else:
                 return self.decide_vertices_to_connect_special_inner(subgraph, u,v,x,y)
 
-
-
+    def test_conjecture(self):
+        assert self.graph.is_k222_percolating()
+        if not self.graph.is_k5_percolating():
+            print("Found graph which is K222 percolating and not K5 percolating.")
+            self.graph.print_graph()
+            raise AssertionError
+        return True
 
     def smart_enlarge(self):
         while self.graph.number_of_nodes() < self.n:
             print(f'current number of nodes={self.graph.number_of_nodes()}')
 
             assert self.graph.number_of_edges() == 3 * self.graph.number_of_nodes() - 6
-            edges = list(self.graph.edges)
-            idx = np.random.randint(len(edges))
-            edge_to_remove = edges[idx]
 
-            # self.check_conjecture_3n_6(edge_to_remove)  # Along the way check
+            self.test_conjecture()
 
-            vertices_to_connect = self.decide_vertices_to_connect(edge_to_remove)
+            edges = list(self.graph.edges())
+            while True:
+                idx = np.random.randint(len(edges))
+                edge_to_remove = edges[idx]
+                # edge_to_remove = edges[1]  #ONLY FOR TESTING
 
-            self.graph.remove_edge(*edge_to_remove)
-            new_node = self.graph.number_of_nodes()
-            self.graph.add_node(new_node)
-            self.graph.add_edges_from([(new_node, vertex) for vertex in vertices_to_connect])
-            assert self.graph.number_of_edges() == 3 * self.graph.number_of_nodes() - 6
+                # self.check_conjecture_3n_6(edge_to_remove)  # Along the way check
 
-            self.graph.print_graph()
-
-            # assert self.graph.is_k222_percolating()  # Only for testing - remove after
-            if not self.graph.is_k222_percolating():
+                try:
+                    vertices_to_connect = self.decide_vertices_to_connect(edge_to_remove)
+                except AssertionError:
+                    continue
+                # print("Before:")
                 # self.graph.print_graph()
-                raise AssertionError
+                self.graph.remove_edge(*edge_to_remove)
+                # print('removing', edge_to_remove)
+
+                new_node = max(self.graph.nodes) + 1
+                self.graph.add_node(new_node)
+                self.graph.add_edges_from([(new_node, vertex) for vertex in vertices_to_connect])
+
+                if self.graph.is_k222_percolating():
+                    break
+
+                # print("After:")
+                # self.graph.print_graph()
 

@@ -39,6 +39,7 @@ class TestCreate(unittest.TestCase):
 
 
 
+
     def test_get_opposite(self):
         G = PercolationGraph(nx.complete_multipartite_graph(2, 2, 2))
         G.remove_edge(0, 2)
@@ -49,9 +50,25 @@ class TestCreate(unittest.TestCase):
         G.remove_edge(0, 2)
         G.add_edge(0,1)
 
-        creator = CreateLargeGraph(10, G)
+        creator = CreateLargeGraph(13, G)
         creator.smart_enlarge()
-        assert creator.graph.is_k222_percolating()
+        self.assertTrue(creator.test_conjecture())
+
+    def test_specific(self):
+        G = PercolationGraph(nx.Graph())
+        G.add_edges_from([
+            (0, 3), (0, 4), (0, 5), (0, 1), (0, 6),
+            (1, 2), (1, 3), (1, 4),
+            (2, 4), (2, 5), (2, 6),
+            (3, 4), (3, 5),
+            (4, 6),
+            (5, 6),
+        ])
+        self.assertEqual(G.number_of_edges(), 3 * G.number_of_nodes() - 6)
+        self.assertTrue(G.is_k222_percolating())
+        self.assertFalse(G.is_k5_percolating())
+        # Refutation!
+
 
 if __name__ == '__main__':
     unittest.main()
