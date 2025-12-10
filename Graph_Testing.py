@@ -79,7 +79,17 @@ class TestPercolationGraph(unittest.TestCase):
         answer = PG.is_k222_percolating((0, 1))
         assert PG.is_k5_percolating()
         assert answer, "Test 5 Failed: K_222^+ should percolate"
-        # print("Basic unit tests passed ✅")
+
+        G = nx.complete_multipartite_graph(2, 2, 2)
+        G.add_edge(0,1)
+        G.add_node(6)
+        G.add_edge(0,6)
+        G.add_edge(1,6)
+        answer, graph = PercolationGraph(G).is_k5_percolating(return_final_graph=True)
+        self.assertFalse(answer)
+        self.assertEqual(graph.number_of_edges(), 17)
+        self.assertTrue(graph.has_edge(6,1))
+        self.assertFalse(graph.has_edge(6,2))
 
     def test_again_is_k222_perc(self):
         G = nx.Graph()
@@ -190,6 +200,25 @@ class TestPercolationGraph(unittest.TestCase):
         S, f = G.find_k222_without_two_edges((0,1), False)
         self.assertEqual(f, (2,4))
         self.assertEqual(S.number_of_edges(), 11)
+
+
+    def test_is_rigid(self):
+        G = PercolationGraph(nx.complete_graph(5))
+        self.assertTrue(G.is_rigid())
+
+        G = PercolationGraph(nx.complete_multipartite_graph(2,2,2))
+        self.assertTrue(G.is_rigid())
+
+        G = PercolationGraph(nx.Graph())
+        G.add_edges_from([(0,1),(1,2),(2,3),(0,3)])
+        self.assertFalse(G.is_rigid())
+
+        G = PercolationGraph(nx.complete_graph(200))
+        G.add_edges_from([(200,0), (200,4)])
+        self.assertFalse(G.is_rigid())
+        G.add_edge(200,100)
+        self.assertTrue(G.is_rigid())
+
 
 
 if __name__ == '__main__':

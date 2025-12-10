@@ -1,6 +1,8 @@
 import networkx as nx
 import itertools
 
+import numpy as np
+
 
 class PercolationGraph(nx.Graph):
     def __init__(self, base_graph=None, **kwargs):
@@ -95,7 +97,7 @@ class PercolationGraph(nx.Graph):
                 return True
         return False
 
-    def is_k5_percolating(self):
+    def is_k5_percolating(self, return_final_graph=False):
         """Simulate K_5 percolation closure."""
         G = self.copy()
         nodes = list(G.nodes())
@@ -119,7 +121,8 @@ class PercolationGraph(nx.Graph):
                         break
                 if changed:
                     break
-
+        if return_final_graph:
+            return G.number_of_edges() == n * (n - 1) // 2, G
         return G.number_of_edges() == n * (n - 1) // 2
 
     def print_graph(self, file=None):
@@ -202,3 +205,24 @@ class PercolationGraph(nx.Graph):
                     return H, missing_other
 
         return None, None
+
+    def is_rigid(self):
+        n = self.number_of_nodes()
+        m = self.number_of_edges()
+
+        # Random generic positions in R^3
+        P = np.random.random((n, 3))
+
+        # Rigidity matrix: m rows (edges), 3n columns (coords)
+        R = np.zeros((m, 3 * n))
+
+        for row_idx, (u, v) in enumerate(self.edges()):
+            # vector difference in R^3
+            diff = P[u] - P[v]  # shape (3,)
+            R[row_idx, 3 * u: 3 * u + 3] = diff
+            R[row_idx, 3 * v: 3 * v + 3] = -diff
+
+        # Rank test for rigidity:
+        rank = np.linalg.matrix_rank(R)
+        # maximal infinitesimal rigidity rank in R^3:
+        return rank == 3 * n - 6
