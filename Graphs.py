@@ -226,3 +226,30 @@ class PercolationGraph(nx.Graph):
         rank = np.linalg.matrix_rank(R)
         # maximal infinitesimal rigidity rank in R^3:
         return rank == 3 * n - 6
+
+    def is_k222_graph_non_induced(self):
+        """Return True if the graph is exactly a K_{2,2,2} (6 nodes, 12 cross edges)."""
+        if self.number_of_nodes() != 6:
+            return False
+
+        nodes = list(self.nodes())
+        # edges in the induced subgraph on these 6 nodes
+        sub_edges = {tuple(sorted(e)) for e in self.subgraph(nodes).edges()}
+
+        for A in itertools.combinations(nodes, 2):
+            rest = [v for v in nodes if v not in A]
+            for B in itertools.combinations(rest, 2):
+                C = [v for v in rest if v not in B]
+
+                cross_edges = (
+                        set(itertools.product(A, B)) |
+                        set(itertools.product(A, C)) |
+                        set(itertools.product(B, C))
+                )
+                cross_edges = {tuple(sorted(e)) for e in cross_edges}
+
+                if sub_edges >= cross_edges:
+                    return True
+
+        return False
+

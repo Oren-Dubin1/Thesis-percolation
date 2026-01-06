@@ -19,6 +19,5 @@ class TestDoublePercolation(unittest.TestCase):
         self.assertFalse(DP.is_double_percolating(), "Test Failed: Sparse graph shouldn't be double percolating")
 
 
-
 if __name__ == '__main__':
         unittest.main()

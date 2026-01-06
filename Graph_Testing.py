@@ -220,6 +220,18 @@ class TestPercolationGraph(unittest.TestCase):
         self.assertTrue(G.is_rigid())
 
 
+    def test_k222_checker(self):
+        G = nx.complete_multipartite_graph(2,2,2)
+        PG = PercolationGraph(G)
+        self.assertTrue(PG.is_k222_graph_non_induced())
+
+        PG.add_edge(0,1)
+        self.assertTrue(PG.is_k222_graph_non_induced())
+
+        self.assertTrue(PercolationGraph(nx.complete_graph(6)).is_k222_graph_non_induced())
+
+        PG.remove_edge(0,2)
+        self.assertFalse(PG.is_k222_graph_non_induced())
 
 if __name__ == '__main__':
     unittest.main()
