@@ -308,7 +308,7 @@ def enumerate_graphs_with_added_vertex(G: nx.Graph, v: int=0):
 def check_conj_all_graphs(G: nx.Graph,
                           v: int,
                           x: int,
-                          target_vertex: int = 6,
+                          target_vertex: int = None,
                           depth: int = 1,
                           base_graphs: Optional[Set] = None
                           ) -> bool:
@@ -326,6 +326,9 @@ def check_conj_all_graphs(G: nx.Graph,
     """
     print(f"Entering check_conj_all_graphs: depth={depth}, target_vertex={target_vertex}, v={v}, x={x}")
 
+    if target_vertex is None:
+        target_vertex = max(G.nodes()) + 1
+        print(f"    target_vertex not provided, set to {target_vertex}")
     if base_graphs is None:
         base_graphs = {G}
         print(f"Initialized base_graphs with 1 graph")

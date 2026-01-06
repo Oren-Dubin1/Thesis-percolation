@@ -3,7 +3,7 @@
 import unittest
 import networkx as nx
 
-from k222_k5_percolation_by_chat import (
+from k222_k5_percolation_with_v_x import (
     remove_vertex_relabel,
     all_pair_partitions_6,
     k5_witnesses,
@@ -13,7 +13,9 @@ from k222_k5_percolation_by_chat import (
     edge_addable_without_v_one_step,
     brute_force_sequences,
     percolate_without_v,
-    witnesses_for_edge
+    witnesses_for_edge,
+check_conj_all_graphs,
+
 )
 
 
@@ -277,6 +279,12 @@ class TestPercolationBruteforce(unittest.TestCase):
 
         self.assertTrue(any(ev.added_edge == (3, 6) and ev.witness.rule == "K222" for ev in events))
         self.assertTrue(any(ev.added_edge == (3, 6) and ev.could_add_without_v for ev in events))
+
+    def test_conj(self):
+        G = nx.complete_multipartite_graph(2, 2, 2)
+        v = 0
+        x = 1
+        self.assertTrue(check_conj_all_graphs(G, v, x, target_vertex=5, depth=3))
 
 
 if __name__ == "__main__":
