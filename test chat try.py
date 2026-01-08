@@ -2,6 +2,7 @@
 
 import unittest
 import networkx as nx
+from unittest.mock import patch
 
 from k222_k5_percolation_with_v_x import (
     remove_vertex_relabel,
@@ -14,7 +15,7 @@ from k222_k5_percolation_with_v_x import (
     brute_force_sequences,
     percolate_without_v,
     witnesses_for_edge,
-check_conj_all_graphs,
+    check_conj_all_graphs, find_vx_witness_for_ij,
 
 )
 
@@ -28,6 +29,15 @@ def make_complete_graph(nodes):
         for v in nodes[i + 1:]:
             G.add_edge(u, v)
     return G
+
+class DummyWitness:
+    def __init__(self, vertices, parts=None, rule="K222"):
+        self.vertices = tuple(vertices)
+        self.parts = parts
+        self.rule = rule
+
+    def __repr__(self):
+        return f"DummyWitness(vertices={self.vertices}, parts={self.parts}, rule={self.rule})"
 
 
 class TestPercolationBruteforce(unittest.TestCase):
@@ -280,11 +290,59 @@ class TestPercolationBruteforce(unittest.TestCase):
         self.assertTrue(any(ev.added_edge == (3, 6) and ev.witness.rule == "K222" for ev in events))
         self.assertTrue(any(ev.added_edge == (3, 6) and ev.could_add_without_v for ev in events))
 
-    def test_conj(self):
-        G = nx.complete_multipartite_graph(2, 2, 2)
-        v = 0
-        x = 1
-        self.assertTrue(check_conj_all_graphs(G, v, x, target_vertex=5, depth=3))
+    def test_detects_edge_ij_added_by_k222_with_vx_pair(self):
+        # Build a K222^- on 6 vertices with parts {v,x}, {i,a}, {b,c}
+        # Missing edge is (i,b), which is NOT incident to v or x.
+        v, x = 0, 1
+        i, a = 2, 3
+        b, c = 4, 5
+
+        G = nx.Graph()
+        G.add_nodes_from(range(6))
+
+        parts = [(v, x), (i, a), (b, c)]
+
+        # Add all cross edges between different parts
+        for p in range(3):
+            for q in range(p + 1, 3):
+                for u in parts[p]:
+                    for w in parts[q]:
+                        G.add_edge(u, w)
+
+        # Remove one cross edge not incident to v or x
+        # Choose (i,b) = (2,4)
+        G.remove_edge(i, b)
+
+        res = find_vx_witness_for_ij(G, v=v, x=x)
+        self.assertIsNotNone(res)
+
+        (edge, wit) = res
+        self.assertEqual(set(edge), {i, b})  # should find the missing edge
+        self.assertTrue(any(set(pair) == {v, x} for pair in wit.parts))
+
+    def test_returns_none_when_no_k222_witness_pairs_vx(self):
+        # Build a K222^- where v and x are NOT paired in the witness.
+        # Parts: {v,i}, {x,a}, {b,c}. Missing edge: (i,b).
+        v, x = 0, 1
+        i, a = 2, 3
+        b, c = 4, 5
+
+        G = nx.Graph()
+        G.add_nodes_from(range(6))
+
+        parts = [(v, i), (x, a), (b, c)]
+
+        for p in range(3):
+            for q in range(p + 1, 3):
+                for u in parts[p]:
+                    for w in parts[q]:
+                        G.add_edge(u, w)
+
+        # Remove a cross edge not incident to v or x: (i,b) = (2,4)
+        G.remove_edge(i, b)
+
+        res = find_vx_witness_for_ij(G, v=v, x=x)
+        self.assertIsNone(res)
 
 
 if __name__ == "__main__":

@@ -305,13 +305,49 @@ def enumerate_graphs_with_added_vertex(G: nx.Graph, v: int=0):
             H = percolate_without_v(G2, v)
             yield H
 
+
+
+def find_vx_witness_for_ij(H: nx.Graph, v: int, x: int) -> Optional[Tuple[Tuple[int, int], object]]:
+    """
+    Search for an edge (i, j), i, j != v,x, that is addable in H by a K222 witness
+    that uses {v,x} as one of its pairs (parts).
+
+    Returns:
+        (edge, witness) if found, else None.
+
+    Assumptions on witness object (as in your codebase):
+      - wit.rule is "K222" or similar (optional; we also accept checking wit.parts)
+      - wit.vertices: iterable of vertices in the witness
+      - wit.parts: iterable of 3 pairs for K222 witnesses (each pair a 2-tuple)
+    """
+    # Consider only missing edges incident to v
+    for i in H.nodes():
+        for j in H.nodes():
+            if i == v or i == x or j == v or j == x:
+                continue
+            if H.has_edge(i, j):
+                continue  # already present, not "added"
+            e = (i, j)
+
+            wits = witnesses_for_edge(H, e)
+            for wit in wits:
+                # We only care about K222 steps where {v,x} is a part (pair)
+                parts = getattr(wit, "parts", None)
+                if parts is None:
+                    continue
+                if any(set(pair) == {v, x} for pair in parts):
+                    return e, wit
+
+    return None
+
+
 def check_conj_all_graphs(G: nx.Graph,
-                          v: int,
-                          x: int,
-                          target_vertex: int = None,
-                          depth: int = 1,
-                          base_graphs: Optional[Set] = None
-                          ) -> bool:
+                      v: int,
+                      x: int,
+                      target_vertex: int = None,
+                      depth: int = 1,
+                      base_graphs: Optional[Set] = None
+                      ) -> bool:
     """
     Check the conjecture for all graphs obtained by adding a new vertex to G
     connected to at least 3 vertices other than v, and percolating without v.
@@ -337,24 +373,36 @@ def check_conj_all_graphs(G: nx.Graph,
     base_list = list(base_graphs)
     print(f"Processing {len(base_list)} base graph(s) at this level")
 
+    # Counter for how many NEW graphs at this depth we actually processed
+    processed_count = 0
+
     for idx, graph in enumerate(base_list, start=1):
+        if not idx % 10:
+            print(f"  Processing base graph {idx} of {len(base_list)}")
         graphs = list(enumerate_graphs_with_added_vertex(graph))
-        print(f"    Generated {len(graphs)} graph(s) with an added vertex, depth {depth}")
+        print(f"    Generated {len(graphs)} graph(s) with an added vertex, depth {depth}, number of vertices in base graph: {graph.number_of_nodes()}")
 
         for H_idx, H in enumerate(graphs, start=1):
             if H in checked_graphs:
+                print(" already checked; skipping")
                 continue
 
-            witnesses = witnesses_for_edge(H, (target_vertex, v))
+            edge, witnesses = find_vx_witness_for_ij(H, v, x) or (None, [])
+            # If witnesses is a single witness from your helper, normalize to iterable
+            if witnesses and not isinstance(witnesses, list):
+                witnesses = [witnesses]
+
             for wit in witnesses:
                 if x not in wit.vertices:
                     continue
-                print(f"        Counterexample found: witness {wit} includes x={x}; printing graph then raising")
+                print(f"\n        Counterexample found: witness {wit} includes x={x}; printing graph then raising")
                 PercolationGraph(H).print_graph()
                 raise ValueError(f"Conjecture failed for graph with added vertex: edge ({target_vertex},{v}) addable by {wit} including x={x}")
 
             checked_graphs.add(H)
+            processed_count += 1
 
+    print(f"Processed {processed_count} new graph(s) at this depth")
     depth -= 1
     print(f"Level complete. Remaining depth after decrement: {depth}")
     if not depth:
@@ -371,4 +419,4 @@ if __name__ == "__main__":
     G = nx.complete_multipartite_graph(2,2,2)
     v = 0
     x = 1
-    print(check_conj_all_graphs(G, v, x, target_vertex=5, depth=3))
+    print(check_conj_all_graphs(G, v, x, depth=4))
