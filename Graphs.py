@@ -253,3 +253,25 @@ class PercolationGraph(nx.Graph):
 
         return False
 
+
+if __name__ == "__main__":
+    # Example usage
+    G = PercolationGraph()
+    edges = [
+        # tetrahedron on {0,1,2,3}
+        (0, 1), (0, 2), (0, 3),
+        (1, 2), (1, 3),
+        (2, 3),
+
+        # tetrahedron on {0,1,2,4}
+        (0, 4), (1, 4), (2, 4),
+
+        # degree-3 vertex v = 5
+        (5, 0), (5, 3), (5, 4)
+    ]
+
+    G.add_edges_from(edges)
+    G.remove_node(5)
+    print(G.is_rigid())
+
+

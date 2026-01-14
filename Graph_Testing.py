@@ -209,6 +209,12 @@ class TestPercolationGraph(unittest.TestCase):
         G = PercolationGraph(nx.complete_multipartite_graph(2,2,2))
         self.assertTrue(G.is_rigid())
 
+        G.remove_edge(0,2)
+        self.assertFalse(G.is_rigid())
+
+        G.add_edge(0,1)
+        self.assertTrue(G.is_rigid())
+
         G = PercolationGraph(nx.Graph())
         G.add_edges_from([(0,1),(1,2),(2,3),(0,3)])
         self.assertFalse(G.is_rigid())

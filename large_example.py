@@ -138,13 +138,23 @@ class CreateLargeGraph:
             raise AssertionError
         return True
 
+    def test_rigid(self):
+        if not self.graph.is_rigid():
+            print("Found graph which is not rigid.")
+            self.graph.print_graph()
+            raise AssertionError
+        return True
+
+
+
     def smart_enlarge(self):
         while self.graph.number_of_nodes() < self.n:
             print(f'current number of nodes={self.graph.number_of_nodes()}')
 
             assert self.graph.number_of_edges() == 3 * self.graph.number_of_nodes() - 6
 
-            self.test_conjecture()
+            # self.test_conjecture()
+            self.test_rigid()
 
             edges = list(self.graph.edges())
             while True:
@@ -173,3 +183,9 @@ class CreateLargeGraph:
                 # print("After:")
                 # self.graph.print_graph()
 
+if __name__ == "__main__":
+    init_graph = PercolationGraph(nx.complete_multipartite_graph(2,2,2))
+    creator = CreateLargeGraph(20, init_graph)
+    creator.smart_enlarge()
+    print("Final graph:")
+    creator.graph.print_graph()
