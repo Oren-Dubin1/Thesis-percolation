@@ -126,8 +126,8 @@ class PercolationGraph(nx.Graph):
         return G.number_of_edges() == n * (n - 1) // 2
 
     def print_graph(self, file=None):
-        for i in range(self.number_of_nodes()):
-            print(i, file=file)
+        for node in self.nodes():
+            print(node, file=file)
         for e in self.edges():
             print(*e, file=file)
 
@@ -255,23 +255,22 @@ class PercolationGraph(nx.Graph):
 
 
 if __name__ == "__main__":
-    # Example usage
-    G = PercolationGraph()
-    edges = [
-        # tetrahedron on {0,1,2,3}
-        (0, 1), (0, 2), (0, 3),
-        (1, 2), (1, 3),
-        (2, 3),
+    G = PercolationGraph(nx.complete_multipartite_graph(2, 2, 2))
+    G.remove_edge(2,4)
+    G.remove_edge(3,5)
+    G.add_edge(4,5)
+    G.add_edges_from([(1,2), (1,3), (1,4), (1,5), (1,6), (1,7)])
+    G.add_edges_from([(6,2), (6,4), (7,6), (7,3)])
+    G.print_graph()
+    answer, graph = G.is_k222_percolating(return_final_graph=True)
+    print("Is graph with v Percolating?", answer)
+    print('Final graph has edge (7,5)???', graph.has_edge(7,5))
+    G.remove_node(0)
+    answer, graph = G.is_k222_percolating(return_final_graph=True)
+    print("Is graph without v Percolating?", answer)
+    print('Final graph has edge (7,5)???', graph.has_edge(7,5))
 
-        # tetrahedron on {0,1,2,4}
-        (0, 4), (1, 4), (2, 4),
 
-        # degree-3 vertex v = 5
-        (5, 0), (5, 3), (5, 4)
-    ]
 
-    G.add_edges_from(edges)
-    G.remove_node(5)
-    print(G.is_rigid())
 
 
