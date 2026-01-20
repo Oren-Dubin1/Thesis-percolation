@@ -13,10 +13,10 @@ class TestLargeGraphFinder(unittest.TestCase):
         self.assertIsNone(finder.helper_graph)
 
     def test_sample_gnp_sets_graph_and_is_reproducible(self):
-        finder = LargeGraphFinder(n=5, p=0.5)
-        g1 = finder.sample_gnp(seed=123)
+        finder = LargeGraphFinder(n=5)
+        g1 = finder.sample_gnp(seed=123, p=0.5)
         # call again with same seed -> reproducible
-        g2 = finder.sample_gnp(seed=123)
+        g2 = finder.sample_gnp(seed=123, p=0.5)
 
         self.assertIsInstance(g1, nx.Graph)
         self.assertEqual(len(g1.nodes()), 5)

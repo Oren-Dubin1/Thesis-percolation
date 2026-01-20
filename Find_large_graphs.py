@@ -2,6 +2,32 @@ import itertools
 import networkx as nx
 import random
 from Graphs import PercolationGraph
+import os
+
+
+def read_graphs_from_edgelist(path):
+    """Given a folder path, find all .edgelist files and return a list of LargeGraphFinder
+    instances with each graph loaded. If `path` is a single .edgelist file, return a
+    list containing a single finder.
+    """
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Path not found: {path}")
+
+    files = []
+    if os.path.isfile(path):
+        files = [path]
+    else:
+        # list .edgelist files in directory, sorted for determinism
+        files = [os.path.join(path, f) for f in sorted(os.listdir(path)) if f.endswith('.edgelist')]
+
+    finders = []
+    for fpath in files:
+        F = LargeGraphFinder()
+        F.read_graph_from_edgelist(fpath)
+        finders.append(F)
+
+    return finders
+
 
 
 class LargeGraphFinder:
@@ -10,6 +36,9 @@ class LargeGraphFinder:
         self.initial_graph = graph.copy() if graph is not None else None
         self.helper_graph = helper_graph
         self.n = n
+
+        self.all_edges = list(itertools.combinations(range(self.n), 2))
+
 
 
     def print_graph(self, file=None):
@@ -26,15 +55,18 @@ class LargeGraphFinder:
         return self.graph
 
     def sample_3n_6(self, seed=None):
-        """Return a random 3n - 6 graph (networkx Graph)."""
+        """Return a random 3n - 6 graph (networkx Graph) with minimal degree >= 3."""
         if seed is not None:
             random.seed(seed)
+        while True:
+            selected_edges = random.sample(list(self.all_edges), 3 * self.n - 6)
+            G = nx.Graph()
+            G.add_nodes_from(range(self.n))
+            G.add_edges_from(selected_edges)
+            if all(deg >= 3 for _, deg in G.degree()):
+                break
 
-        edges = itertools.combinations(range(self.n), 2)
-        selected_edges = random.sample(list(edges), 3 * self.n - 6)
-        self.graph = nx.Graph()
-        self.graph.add_nodes_from(range(self.n))
-        self.graph.add_edges_from(selected_edges)
+        self.graph = G
         self.initial_graph = self.graph.copy()
         self._build_helper_graph()
         return self.graph
@@ -215,18 +247,18 @@ class LargeGraphFinder:
         import time
         from datetime import datetime
 
-
-        os.makedirs(output_dir, exist_ok=True)
-        log_path = os.path.join(output_dir, log_file)
-
         orig_n = self.n
         if n is not None:
             self.n = n
 
+        output_dir = output_dir + f'/n_{self.n}'
+
+        os.makedirs(output_dir, exist_ok=True)
+        log_path = os.path.join(output_dir, log_file)
+
         results = []
         try:
             for attempts in range(max_tries):
-
                 attempt_seed = None if seed is None else seed + attempts
                 self.sample_3n_6(seed=attempt_seed)
                 print(f'Attempt {attempts} at {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
@@ -236,13 +268,14 @@ class LargeGraphFinder:
 
                 p_fname = f"{attempts}".replace('.', '_')
                 if percolated:
-                    fname = f"percolating_p_{p_fname}.edgelist"
+                    fname = f"percolating_{p_fname}.edgelist"
                     path = os.path.join(output_dir, fname)
                     nx.write_edgelist(self.initial_graph, path, data=False)
                     summary = (f"{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} | attempts={attempts} | "
                                f"nodes={self.graph.number_of_nodes()} edges={self.graph.number_of_edges()} "
                                f"| file={fname}\n")
                     results.append({'attempts': attempts, 'file': path})
+                    print(summary)
                 else:
                     summary = (f"{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} | attempts={attempts} | "
                                f"FAILED to percolate within {max_tries} attempts\n")
@@ -263,8 +296,6 @@ class LargeGraphFinder:
         self.graph = nx.read_edgelist(path, nodetype=int)
         self.initial_graph = self.graph.copy()
         return self.graph
-
-
 
 
 if __name__ == "__main__":
