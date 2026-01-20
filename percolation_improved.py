@@ -7,13 +7,34 @@ import numpy as np
 from Graphs import PercolationGraph
 import os
 
+
+def sample_3n_6(n, seed=None):
+    """Return a random 3n - 6 graph (networkx Graph) with minimal degree >= 3."""
+    if seed is not None:
+        random.seed(seed)
+
+    all_edges = list(itertools.combinations(range(n), 2))
+
+    while True:
+        selected_edges = random.sample(list(all_edges), 3 * n - 6)
+        G = nx.Graph()
+        G.add_nodes_from(range(n))
+        G.add_edges_from(selected_edges)
+        if all(deg >= 3 for _, deg in G.degree()):
+            break
+
+    graph = Graph(G)
+
+    return graph
+
 class Graph:
-    def __init__(self, graph=None, n=None):
+    def __init__(self, graph):
         self.graph = graph
-        self.n = n if n is not None else (graph.number_of_nodes() if graph is not None else 0)
+        self.n = self.graph.number_of_nodes()
         self.helper_matrix = None
         self.index_map = None
         self.local_addition_matrix = None
+
 
         if self.graph is not None:
             self.build_helper_matrix()
@@ -139,8 +160,10 @@ class Graph:
         return percolated
 
 
+
+
+
 if __name__ == "__main__":
-    graph = nx.erdos_renyi_graph(30, 0.5)
-    print("starting")
-    perc_graph = Graph(graph=graph)
-    print("Is percolating:", perc_graph.is_percolating())
+    G = sample_3n_6(10, seed=42)
+    print("Graph edges:", G.graph.number_of_edges())
+    print("Is percolating:", G.is_percolating())
