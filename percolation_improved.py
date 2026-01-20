@@ -7,36 +7,150 @@ import numpy as np
 from Graphs import PercolationGraph
 import os
 
+def read_graphs_from_edgelist(path):
+    """Given a folder path, find all .edgelist files and return a list of LargeGraphFinder
+    instances with each graph loaded. If `path` is a single .edgelist file, return a
+    list containing a single finder.
+    """
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Path not found: {path}")
+
+    if os.path.isfile(path):
+        files = [path]
+    else:
+        # list .edgelist files in directory, sorted for determinism
+        files = [os.path.join(path, f) for f in sorted(os.listdir(path)) if f.endswith('.edgelist')]
+
+    graphs = []
+    for fpath in files:
+        F = Graph(None)
+        F.read_graph_from_edgelist(fpath)
+        graphs.append(F)
+
+    return graphs
+
 
 def sample_3n_6(n, seed=None):
-    """Return a random 3n - 6 graph (networkx Graph) with minimal degree >= 3."""
+    """Construct a 3n-6 graph with minimal degree >= 3 using the shuffled-edge pass approach.
+
+    Algorithm (per user):
+    - Create a shuffled list of all possible edges.
+    - Iterate once over that list and add each edge if it is incident to a vertex whose current
+      degree is less than 3 (and the edge is not already present).
+    - After the pass, if some vertices still have degree < 3, do targeted additions using remaining
+      edges to satisfy degree constraints.
+    - Finally, add arbitrary remaining edges from the shuffled list until exactly 3n-6 edges are present.
+    """
+    if n < 4:
+        raise ValueError("n must be at least 4 to construct a 3n-6 graph with min degree >= 3")
     if seed is not None:
         random.seed(seed)
 
-    all_edges = list(itertools.combinations(range(n), 2))
+    nodes = list(range(n))
+    all_edges = [tuple(e) for e in itertools.combinations(nodes, 2)]
+    random.shuffle(all_edges)
 
-    while True:
-        selected_edges = random.sample(list(all_edges), 3 * n - 6)
-        G = nx.Graph()
-        G.add_nodes_from(range(n))
-        G.add_edges_from(selected_edges)
-        if all(deg >= 3 for _, deg in G.degree()):
+    G = nx.Graph()
+    G.add_nodes_from(nodes)
+
+    degree = {u: 0 for u in nodes}
+    edge_set = set()
+
+    target_edges = 3 * n - 6
+
+    # Single pass: add edge if it helps a vertex with degree < 3
+    for (u, v) in all_edges:
+        if len(edge_set) >= target_edges:
             break
+        if (u, v) in edge_set or (v, u) in edge_set:
+            continue
+        if degree[u] < 3 or degree[v] < 3:
+            G.add_edge(u, v)
+            edge_set.add((u, v))
+            degree[u] += 1
+            degree[v] += 1
+
+    # Final fill: add arbitrary remaining edges until we have target_edges
+    if len(edge_set) < target_edges:
+        for (u, v) in all_edges:
+            if len(edge_set) >= target_edges:
+                break
+            if (u, v) in edge_set or (v, u) in edge_set:
+                continue
+            G.add_edge(u, v)
+            edge_set.add((u, v))
+            # update degree counts
+            degree[u] += 1
+            degree[v] += 1
+
+    # Final validation
+    if len(edge_set) != target_edges:
+        raise RuntimeError(f"Failed to construct 3n-6 graph: have {len(edge_set)} edges, expected {target_edges}")
+    if any(d < 3 for d in degree.values()):
+        raise RuntimeError("Failed to ensure minimum degree >= 3 for all vertices")
 
     graph = Graph(G)
-
     return graph
+
+def run_percolation_experiments(n=None,
+                                seed=None,
+                                output_dir='percolating graphs',
+                                log_file='percolating_graphs.txt',
+                                max_tries=1000,
+                                ):
+    """
+    For each p (either explicit `p_values` or generated from start/stop/step), repeatedly sample G(n,p)
+    until `is_k222_percolating()` returns True or `max_tries` is reached.
+    Saves each successful graph as an edgelist in `output_dir` and appends a summary to `log_file`.
+    """
+    import os
+    import time
+    from datetime import datetime
+
+
+    output_dir = output_dir + f'/n_{n}'
+
+    os.makedirs(output_dir, exist_ok=True)
+    log_path = os.path.join(output_dir, log_file)
+
+    results = []
+    for attempts in range(max_tries):
+        attempt_seed = None if seed is None else seed + attempts
+        graph = sample_3n_6(n, seed=attempt_seed)
+        print(f'Attempt {attempts} at {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
+        percolated = graph.is_percolating()
+        if not percolated:
+            continue
+
+        p_fname = f"{attempts}".replace('.', '_')
+        if percolated:
+            fname = f"percolating_{p_fname}.edgelist"
+            path = os.path.join(output_dir, fname)
+            nx.write_edgelist(graph.original_graph, path, data=False)
+            summary = (f"{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} | attempts={attempts} | "
+                       f"nodes={graph.graph.number_of_nodes()} edges={graph.graph.number_of_edges()} "
+                       f"| file={fname}\n")
+            results.append({'attempts': attempts, 'file': path})
+        else:
+            summary = (f"{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} | attempts={attempts} | "
+                       f"FAILED to percolate within {max_tries} attempts\n")
+            results.append({'attempts': attempts, 'file': None})
+
+        with open(log_path, 'a', encoding='utf-8') as f:
+            f.write(summary)
+
+        time.sleep(0.01)
+
+    return results
 
 class Graph:
     def __init__(self, graph):
         self.graph = graph
-        self.n = self.graph.number_of_nodes()
-        self.helper_matrix = None
-        self.index_map = None
-        self.local_addition_matrix = None
-
-
         if self.graph is not None:
+            self.n = self.graph.number_of_nodes()
+            self.helper_matrix = None
+            self.index_map = None
+            self.local_addition_matrix = None
             self.build_helper_matrix()
             self.original_graph = graph.copy()
 
@@ -160,10 +274,26 @@ class Graph:
         return percolated
 
 
+    def read_graph_from_edgelist(self, path):
+        """Read a graph from an edgelist file and set it as self.graph."""
+        self.graph = nx.read_edgelist(path, nodetype=int)
+        self.original_graph = self.graph.copy()
+        return self.graph
+
+    def is_rigid(self):
+        return PercolationGraph(self.graph).is_rigid()
+
+
 
 
 
 if __name__ == "__main__":
-    G = sample_3n_6(10, seed=42)
-    print("Graph edges:", G.graph.number_of_edges())
-    print("Is percolating:", G.is_percolating())
+    n = 10
+    run_percolation_experiments(n=n, max_tries=100)
+    graphs = read_graphs_from_edgelist(f'percolating graphs/n_{n}')
+    flag = True
+    for g in graphs:
+        rig = g.is_rigid()
+        flag = flag and rig
+
+    print(f"All graphs rigid: {flag}")

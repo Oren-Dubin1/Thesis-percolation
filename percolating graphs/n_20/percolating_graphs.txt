@@ -1,0 +1,2 @@
+2026-01-20 22:25:51 | attempts=3 | nodes=20 edges=54 | file=percolating_3.edgelist
+2026-01-20 22:26:57 | attempts=18 | nodes=20 edges=54 | file=percolating_18.edgelist

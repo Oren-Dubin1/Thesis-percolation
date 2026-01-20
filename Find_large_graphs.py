@@ -13,7 +13,6 @@ def read_graphs_from_edgelist(path):
     if not os.path.exists(path):
         raise FileNotFoundError(f"Path not found: {path}")
 
-    files = []
     if os.path.isfile(path):
         files = [path]
     else:
@@ -299,5 +298,5 @@ class LargeGraphFinder:
 
 
 if __name__ == "__main__":
-    F = LargeGraphFinder(n=20)
+    F = LargeGraphFinder(n=10)
     F.run_percolation_experiments(max_tries=100)
