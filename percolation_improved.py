@@ -85,9 +85,9 @@ def sample_3n_6(n, seed=None):
 
     # Final validation
     if len(edge_set) != target_edges:
-        raise RuntimeError(f"Failed to construct 3n-6 graph: have {len(edge_set)} edges, expected {target_edges}")
+        return sample_3n_6(n, seed=seed + 1 if seed is not None else None)
     if any(d < 3 for d in degree.values()):
-        raise RuntimeError("Failed to ensure minimum degree >= 3 for all vertices")
+        return sample_3n_6(n, seed=seed + 1 if seed is not None else None)
 
     graph = Graph(G)
     return graph
@@ -112,25 +112,28 @@ def run_percolation_experiments(n=None,
 
     os.makedirs(output_dir, exist_ok=True)
     log_path = os.path.join(output_dir, log_file)
-
+    count_percolated = 0
     results = []
     for attempts in range(max_tries):
         attempt_seed = None if seed is None else seed + attempts
+        assert attempt_seed is None
         graph = sample_3n_6(n, seed=attempt_seed)
-        print(f'Attempt {attempts} at {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
+        print(f'\nAttempt {attempts} at {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}', end='')
         percolated = graph.is_percolating()
         if not percolated:
             continue
 
         p_fname = f"{attempts}".replace('.', '_')
         if percolated:
-            fname = f"percolating_{p_fname}.edgelist"
+            fname = f"percolating_{p_fname}_2.edgelist"
             path = os.path.join(output_dir, fname)
             nx.write_edgelist(graph.original_graph, path, data=False)
             summary = (f"{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} | attempts={attempts} | "
                        f"nodes={graph.graph.number_of_nodes()} edges={graph.graph.number_of_edges()} "
                        f"| file={fname}\n")
             results.append({'attempts': attempts, 'file': path})
+            count_percolated += 1
+            print(f' Percolated and saved graph. Total percolated so far: {count_percolated}')
         else:
             summary = (f"{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} | attempts={attempts} | "
                        f"FAILED to percolate within {max_tries} attempts\n")
@@ -141,6 +144,7 @@ def run_percolation_experiments(n=None,
 
         time.sleep(0.01)
 
+    print()
     return results
 
 class Graph:
@@ -288,8 +292,8 @@ class Graph:
 
 
 if __name__ == "__main__":
-    n = 10
-    run_percolation_experiments(n=n, max_tries=100)
+    n = 20
+    run_percolation_experiments(n=n, max_tries=100000)
     graphs = read_graphs_from_edgelist(f'percolating graphs/n_{n}')
     flag = True
     for g in graphs:
