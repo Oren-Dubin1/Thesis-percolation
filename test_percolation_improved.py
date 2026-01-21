@@ -13,7 +13,7 @@ class TestPercolationImproved(unittest.TestCase):
         G.add_edge(0, 2)
         G.add_edge(0, 3)
         G.add_edge(1, 2)
-        graph_obj = Graph(graph=G, n=4)
+        graph_obj = Graph(graph=G)
         H = graph_obj.build_helper_matrix()
         A = frozenset({0, 1})
         B = frozenset({2, 3})
@@ -25,7 +25,7 @@ class TestPercolationImproved(unittest.TestCase):
         # start with 4 vertices and no original edges
         G = nx.Graph()
         G.add_nodes_from(range(4))
-        graph_obj = Graph(graph=G, n=4)
+        graph_obj = Graph(graph=G)
         graph_obj.build_helper_matrix()  # helper matrix nodes exist
         graph_obj.set_local_addition_matrix()
 
@@ -45,18 +45,18 @@ class TestPercolationImproved(unittest.TestCase):
         G = nx.complete_multipartite_graph(2,2,2)
         G.remove_edge(0,3)
         G.add_edge(0,1)
-        graph_obj = Graph(graph=G, n=6)
+        graph_obj = Graph(graph=G)
         u,v = graph_obj.is_percolating_one_step()
         self.assertEqual((u,v), (0,3))
 
     def test_is_percolating(self):
         G = nx.complete_multipartite_graph(2, 2, 2)
         G.remove_edge(0, 3)
-        graph_obj = Graph(graph=G, n=6)
+        graph_obj = Graph(graph=G)
         self.assertFalse(graph_obj.is_percolating())
 
         G.add_edge(0, 1)
-        graph_obj = Graph(graph=G, n=6)
+        graph_obj = Graph(graph=G)
         self.assertTrue(graph_obj.is_percolating())
 
         graph_obj = Graph(graph=nx.complete_graph(20))
@@ -81,6 +81,34 @@ class TestPercolationImproved(unittest.TestCase):
         PG = Graph(G)
         answer = PG.is_percolating()
         self.assertTrue(answer)
+
+    def test_is_rigid(self):
+        G = Graph(nx.complete_graph(5))
+        self.assertTrue(G.is_rigid())
+
+        G = Graph(nx.complete_multipartite_graph(2,2,2))
+        self.assertTrue(G.is_rigid())
+
+        G.graph.remove_edge(0,2)
+        G.build_helper_matrix()
+        self.assertFalse(G.is_rigid())
+
+        G.graph.add_edge(0,1)
+        G.build_helper_matrix()
+        self.assertTrue(G.is_rigid())
+
+        G = nx.Graph()
+        G.add_edges_from([(0,1),(1,2),(2,3),(0,3)])
+        graph = Graph(G)
+        self.assertFalse(graph.is_rigid())
+
+        G = nx.complete_graph(200)
+        G.add_edges_from([(200,0), (200,4)])
+        graph = Graph(G, build_helper=False)
+        self.assertFalse(graph.is_rigid())
+        graph.graph.add_edge(200,100)
+
+        self.assertTrue(graph.is_rigid())
 
 
 

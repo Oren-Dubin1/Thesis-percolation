@@ -148,14 +148,14 @@ def run_percolation_experiments(n=None,
     return results
 
 class Graph:
-    def __init__(self, graph):
+    def __init__(self, graph, build_helper=True):
         self.graph = graph
         if self.graph is not None:
             self.n = self.graph.number_of_nodes()
             self.helper_matrix = None
             self.index_map = None
             self.local_addition_matrix = None
-            self.build_helper_matrix()
+            if build_helper: self.build_helper_matrix()
             self.original_graph = graph.copy()
 
     def build_helper_matrix(self):
@@ -293,7 +293,7 @@ class Graph:
 
 if __name__ == "__main__":
     n = 20
-    run_percolation_experiments(n=n, max_tries=100000)
+    # run_percolation_experiments(n=n, max_tries=100000)
     graphs = read_graphs_from_edgelist(f'percolating graphs/n_{n}')
     flag = True
     for g in graphs:
