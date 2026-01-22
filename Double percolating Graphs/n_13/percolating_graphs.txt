@@ -1,0 +1,8 @@
+2026-01-22 11:14:59 | attempts=7 | nodes=13 edges=33 | file=percolating_7_2.edgelist
+2026-01-22 11:15:01 | attempts=18 | nodes=13 edges=33 | file=percolating_18_2.edgelist
+2026-01-22 11:15:01 | attempts=19 | nodes=13 edges=33 | file=percolating_19_2.edgelist
+2026-01-22 11:15:01 | attempts=21 | nodes=13 edges=33 | file=percolating_21_2.edgelist
+2026-01-22 11:15:02 | attempts=23 | nodes=13 edges=33 | file=percolating_23_2.edgelist
+2026-01-22 11:15:03 | attempts=30 | nodes=13 edges=33 | file=percolating_30_2.edgelist
+2026-01-22 11:15:04 | attempts=32 | nodes=13 edges=33 | file=percolating_32_2.edgelist
+2026-01-22 11:15:05 | attempts=34 | nodes=13 edges=33 | file=percolating_34_2.edgelist
