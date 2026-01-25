@@ -65,7 +65,12 @@ class TestPercolationImproved(unittest.TestCase):
         PG = nx.Graph()
         PG.add_edges_from([(0, 1), (1, 2), (2, 3)])  # A sparse path
         graph_obj = Graph(graph=PG)
-        self.assertFalse(graph_obj.is_percolating())
+        try:
+            graph_obj.is_percolating()
+            self.fail("Expected an exception for insufficient vertices")
+        except ValueError:
+            pass  # Test passes if exception is raised
+
 
         G = nx.Graph()
         G.add_nodes_from(range(11))
@@ -193,6 +198,72 @@ class TestPercolationImproved(unittest.TestCase):
         self.assertFalse(DP.is_double_percolating(), "Test Failed: Sparse graph shouldn't be double percolating")
 
 
+    def test_marked_vertices(self):
+        G = nx.complete_multipartite_graph(2,2,2)
+        graph_obj = Graph(graph=G)
+        marked = graph_obj.marked_vertices
+        count = 0
+        for cell in marked:
+            count += cell
+        self.assertEqual(count, 12)
+
+        G.add_edge(0,1)
+        graph_obj = Graph(graph=G)
+        marked = graph_obj.marked_vertices
+        count = 0
+        for cell in marked:
+            count += cell
+        self.assertEqual(count, 13)
+
+
+    def test_is_k222_plus_percolating_one_step(self):
+        G = nx.complete_multipartite_graph(2,2,2)
+        graph_obj = Graph(graph=G)
+        answer = graph_obj.is_percolating_one_step(k_222_plus=True)
+        self.assertEqual(answer, (frozenset({0,1}), frozenset({2,3}), frozenset({4,5})))
+
+        G.remove_edge(0,2)
+        graph_obj = Graph(graph=G)
+        answer = graph_obj.is_percolating_one_step(k_222_plus=True)
+        self.assertIsNone(answer)
+
+        G.add_edge(0,2)
+        G.add_edge(0,1)
+        graph_obj = Graph(graph=G)
+        answer = graph_obj.is_percolating_one_step(k_222_plus=True)
+        self.assertIsNotNone(answer)
+
+        G = nx.complete_graph(10)
+        graph_obj = Graph(graph=G)
+        answer = graph_obj.is_percolating_one_step(k_222_plus=True)
+        self.assertIsNone(answer)
+
+    def test_is_k222_plus_percolating(self):
+        G = nx.complete_multipartite_graph(2,2,2)
+        graph_obj = Graph(graph=G)
+        self.assertTrue(graph_obj.is_percolating(k_222_plus=True))
+
+        G.add_edge(0,1)
+        graph_obj = Graph(graph=G)
+        self.assertTrue(graph_obj.is_percolating(k_222_plus=True))
+
+
+        G = nx.complete_multipartite_graph(2,2,2)
+        G.remove_edge(0,2)
+        graph_obj = Graph(graph=G)
+        self.assertFalse(graph_obj.is_percolating(k_222_plus=True))
+
+        G = nx.complete_graph(10)
+        graph_obj = Graph(graph=G)
+        self.assertTrue(graph_obj.is_percolating(k_222_plus=True))
+
+        G = nx.complete_graph(4)
+        graph_obj = Graph(graph=G)
+        try:
+            graph_obj.is_percolating(k_222_plus=True)
+            self.fail("Expected an exception for insufficient vertices")
+        except ValueError:
+            pass  # Test passes if exception is raised
 
 if __name__ == '__main__':
     unittest.main()

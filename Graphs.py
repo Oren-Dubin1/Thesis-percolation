@@ -255,12 +255,13 @@ class PercolationGraph(nx.Graph):
 
 
 if __name__ == "__main__":
-    G = PercolationGraph(nx.complete_multipartite_graph(2, 2, 2))
-    G.remove_edge(2,4)
-    G.remove_edge(3,5)
-    G.add_edge(4,5)
+    G = PercolationGraph(nx.Graph())
+    G.add_edges_from([(0,2), (0,3), (0,4)])
     G.add_edges_from([(1,2), (1,3), (1,4), (1,5), (1,6), (1,7)])
-    G.add_edges_from([(6,2), (6,4), (7,6), (7,3)])
+    G.add_edges_from([(2,3), (2,5), (2,6)])
+    G.add_edges_from([(3,4), (3,7)])
+    G.add_edges_from([(4,5), (4,6)])
+    G.add_edge(6,7)
     G.print_graph()
     answer, graph = G.is_k222_percolating(return_final_graph=True)
     print("Is graph with v Percolating?", answer)

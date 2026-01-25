@@ -7,6 +7,9 @@ import numpy as np
 from Graphs import PercolationGraph
 import os
 
+from double_percolations import DoublePercolation
+
+
 def read_graphs_from_edgelist(path):
     """Given a folder path, find all .edgelist files and return a list of LargeGraphFinder
     instances with each graph loaded. If `path` is a single .edgelist file, return a
@@ -23,11 +26,15 @@ def read_graphs_from_edgelist(path):
 
     graphs = []
     for fpath in files:
-        F = Graph(None)
-        F.read_graph_from_edgelist(fpath)
-        graphs.append(F)
+        graphs.append(read_graph_from_edgelist(fpath))
 
     return graphs
+
+def read_graph_from_edgelist(path):
+    """Read a graph from an edgelist file and set it as self.graph."""
+    graph = nx.read_edgelist(path, nodetype=int)
+    G = Graph(graph)
+    return G
 
 
 def sample_3n_6(n, seed=None):
@@ -97,6 +104,7 @@ def run_percolation_experiments(n=None,
                                 output_dir='percolating graphs',
                                 log_file='percolating_graphs.txt',
                                 max_tries=1000,
+                                double_percolation=False
                                 ):
     """
     For each p (either explicit `p_values` or generated from start/stop/step), repeatedly sample G(n,p)
@@ -119,7 +127,12 @@ def run_percolation_experiments(n=None,
         assert attempt_seed is None
         graph = sample_3n_6(n, seed=attempt_seed)
         print(f'\nAttempt {attempts} at {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}', end='')
-        percolated = graph.is_percolating()
+
+        if double_percolation:
+            percolated = graph.is_double_percolating()
+        else:
+            percolated = graph.is_percolating()
+
         if not percolated:
             continue
 
@@ -150,13 +163,27 @@ def run_percolation_experiments(n=None,
 class Graph:
     def __init__(self, graph, build_helper=True):
         self.graph = graph
+        self.helper_matrix = None
+        self.marked_vertices = None
+        self.index_map = None
+
+        self.local_addition_matrix = None
+
         if self.graph is not None:
             self.n = self.graph.number_of_nodes()
-            self.helper_matrix = None
-            self.index_map = None
-            self.local_addition_matrix = None
-            if build_helper: self.build_helper_matrix()
             self.original_graph = graph.copy()
+            if build_helper:
+                self.build_helper_matrix()
+                self.build_marked_vertices()
+
+    def build_marked_vertices(self):
+        assert self.helper_matrix is not None, "Helper matrix must be built before building marked vertices."
+        marked = [False] * self.helper_matrix.shape[0]
+        for idx, node in enumerate(self.index_map.keys()):
+            u, v = list(node)
+            if self.graph.has_edge(u, v):
+                marked[idx] = True
+        self.marked_vertices = marked
 
     def build_helper_matrix(self):
         """
@@ -214,11 +241,15 @@ class Graph:
         self.local_addition_matrix = L
         return L
 
-    def is_percolating_one_step(self, return_vertices=True):
+    def is_percolating_one_step(self, return_vertices=True, k_222_plus=False):
         # Check if there exists a triangle in the helper matrix with weights 3,4,4
+        # If k_222_plus is True, check if graph is k_222+ percolating
         H = self.helper_matrix
         if H is None:
             H = self.build_helper_matrix()
+
+        if k_222_plus and self.marked_vertices is None:
+            self.build_marked_vertices()
 
         size = H.shape[0]
         for i in range(size):
@@ -228,10 +259,24 @@ class Graph:
                     w2 = H[j][k]
                     w3 = H[k][i]
                     weights = sorted([w1, w2, w3])
-                    if weights == [3, 4, 4]:
-                        # Retrieve the corresponding vertex pairs
+                    if weights == [4,4,4] and k_222_plus:
+                        # Ensure there is at least one edge to be added
+                        if self.marked_vertices[i] and self.marked_vertices[j] and self.marked_vertices[k]:
+                            continue
 
                         nodes = list(self.index_map.keys())
+                        return nodes[i], nodes[j], nodes[k]
+
+                    if weights == [3, 4, 4]:
+                        nodes = list(self.index_map.keys())
+                        if k_222_plus:
+                            # Ensure at least one vertex in the triangle is marked
+                            if self.marked_vertices[i] or self.marked_vertices[j] or self.marked_vertices[k]:
+                                return nodes[i], nodes[j], nodes[k]
+
+                            else:
+                                continue
+
                         if w1 == 3:
                             A = nodes[i]
                             B = nodes[j]
@@ -247,12 +292,15 @@ class Graph:
                                 if not self.graph.has_edge(u, v):
                                     if return_vertices:
                                         return u,v
+                                    else:
+                                        return True
 
-                        else:
-                            return True
+
         return None
 
-    def is_percolating(self):
+    def is_percolating(self, k_222_plus=False):
+        if self.n < 6:
+            raise ValueError("Graph must have at least 6 vertices to check for k_222 percolation.")
         # Check if the graph is percolating by checking all possible edge additions
         L = self.local_addition_matrix
         if L is None:
@@ -262,9 +310,20 @@ class Graph:
             H_original = self.build_helper_matrix()
 
         while True:
-            result = self.is_percolating_one_step()
+            result = self.is_percolating_one_step(k_222_plus=k_222_plus)
             if result is None:
                 break  # No more percolating configurations found
+
+            if k_222_plus:
+                p1, p2, p3 = result
+                # Add all edges between the vertices in the three pairs
+                vertices = [*list(p1), *list(p2), *list(p3)]
+                for u,v in itertools.combinations(vertices, 2):
+                    if not self.graph.has_edge(u,v):
+                        self.helper_matrix += L[(u, v)]
+                        self.marked_vertices[self.index_map[frozenset({u,v})]] = True
+                        self.graph.add_edge(u, v)
+                continue
 
             u,v = result
             # Update helper matrix
@@ -278,26 +337,67 @@ class Graph:
         return percolated
 
 
-    def read_graph_from_edgelist(self, path):
-        """Read a graph from an edgelist file and set it as self.graph."""
-        self.graph = nx.read_edgelist(path, nodetype=int)
-        self.original_graph = self.graph.copy()
-        return self.graph
 
     def is_rigid(self):
         return PercolationGraph(self.graph).is_rigid()
+
+    def is_k5_percolating(self, return_final_graph=False):
+        return PercolationGraph(self.graph).is_k5_percolating(return_final_graph=return_final_graph)
+
+
+    def is_k5_percolating_one_step(self, return_edge):
+        for nodes in itertools.combinations(self.graph.nodes, 5):
+            if self.graph.subgraph(nodes).number_of_edges() == 9:
+                if not return_edge:
+                    return True
+
+                for u in nodes:
+                    for v in nodes:
+                        if u != v and not self.graph.has_edge(u,v):
+                            return u, v
+        return None
+
+
+    def is_double_percolating(self):
+        # Check if the graph is percolating by checking all possible edge additions
+        L = self.local_addition_matrix
+        if L is None:
+            L = self.set_local_addition_matrix()
+        H_original = self.helper_matrix
+        if H_original is None:
+            H_original = self.build_helper_matrix()
+
+        while True:
+            result = self.is_k5_percolating_one_step(return_edge=True)
+            if result is None:
+                result = self.is_percolating_one_step()
+
+            if result is None:
+                break
+
+            u, v = result
+            # Update helper matrix
+            self.helper_matrix += L[(u, v)]
+            self.graph.add_edge(u, v)
+
+        percolated = self.graph.number_of_edges() == self.n * (self.n - 1) // 2
+        # Restore original graph and helper matrix
+        self.graph = self.original_graph.copy()
+        self.helper_matrix = H_original.copy()
+        return percolated
 
 
 
 
 
 if __name__ == "__main__":
-    n = 20
-    # run_percolation_experiments(n=n, max_tries=100000)
-    graphs = read_graphs_from_edgelist(f'percolating graphs/n_{n}')
-    flag = True
-    for g in graphs:
-        rig = g.is_rigid()
-        flag = flag and rig
+    # n = 20
+    # run_percolation_experiments(n=n, max_tries=10000, output_dir='Double percolating Graphs', double_percolation=True)
+    # graphs = read_graphs_from_edgelist(f'Double percolating Graphs/n_{n}')
+    G = nx.complete_multipartite_graph(2,2,2)
+    graph_obj = Graph(graph=G)
+    print(graph_obj.is_percolating(k_222_plus=True))
 
-    print(f"All graphs rigid: {flag}")
+
+
+
