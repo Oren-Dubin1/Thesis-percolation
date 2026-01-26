@@ -3,6 +3,7 @@ import networkx as nx
 import random
 
 import numpy as np
+from networkx.classes import non_edges
 
 from Graphs import PercolationGraph
 import os
@@ -161,13 +162,12 @@ def run_percolation_experiments(n=None,
     return results
 
 class Graph:
-    def __init__(self, graph, build_helper=True):
-        self.graph = graph
+    def __init__(self, graph, build_helper=True, build_local_addition=False):
+        self.graph = graph.copy() if graph is not None else None
         self.helper_matrix = None
         self.marked_vertices = None
         self.index_map = None
 
-        self.local_addition_matrix = None
 
         if self.graph is not None:
             self.n = self.graph.number_of_nodes()
@@ -175,6 +175,23 @@ class Graph:
             if build_helper:
                 self.build_helper_matrix()
                 self.build_marked_vertices()
+
+            if build_local_addition:
+                self.set_local_addition_matrix()
+            else:
+                self.local_addition_matrix = None
+
+
+    def restore_graph(self):
+        # Restore the graph object and rebuild helper structures.
+        # Copy the original graph back to avoid mutating the stored original.
+        self.graph = self.original_graph.copy()
+        # Rebuild helper matrix and index map from the restored graph
+        self.helper_matrix = self.build_helper_matrix()
+
+        # Rebuild the marked vertices array
+        self.build_marked_vertices()
+
 
     def build_marked_vertices(self):
         assert self.helper_matrix is not None, "Helper matrix must be built before building marked vertices."
@@ -298,16 +315,14 @@ class Graph:
 
         return None
 
-    def is_percolating(self, k_222_plus=False):
+    def is_percolating(self, k_222_plus=False, print_steps=False):
         if self.n < 6:
             raise ValueError("Graph must have at least 6 vertices to check for k_222 percolation.")
         # Check if the graph is percolating by checking all possible edge additions
         L = self.local_addition_matrix
         if L is None:
             L = self.set_local_addition_matrix()
-        H_original = self.helper_matrix
-        if H_original is None:
-            H_original = self.build_helper_matrix()
+
 
         while True:
             result = self.is_percolating_one_step(k_222_plus=k_222_plus)
@@ -323,17 +338,20 @@ class Graph:
                         self.helper_matrix += L[(u, v)]
                         self.marked_vertices[self.index_map[frozenset({u,v})]] = True
                         self.graph.add_edge(u, v)
+                        if print_steps:
+                            print(f"Added edge ({u}, {v}) for k_222+ percolation.")
                 continue
 
             u,v = result
             # Update helper matrix
             self.helper_matrix += L[(u, v)]
             self.graph.add_edge(u, v)
+            if print_steps:
+                print(f"Added edge ({u}, {v}) for percolation.")
 
         percolated = self.graph.number_of_edges() == self.n * (self.n - 1) // 2
         # Restore original graph and helper matrix
-        self.graph = self.original_graph.copy()
-        self.helper_matrix = H_original.copy()
+        self.restore_graph()
         return percolated
 
 
@@ -391,12 +409,26 @@ class Graph:
 
 
 if __name__ == "__main__":
-    # n = 20
+    n = 7
     # run_percolation_experiments(n=n, max_tries=10000, output_dir='Double percolating Graphs', double_percolation=True)
-    # graphs = read_graphs_from_edgelist(f'Double percolating Graphs/n_{n}')
-    G = nx.complete_multipartite_graph(2,2,2)
-    graph_obj = Graph(graph=G)
-    print(graph_obj.is_percolating(k_222_plus=True))
+    # graphs = read_graphs_from_edgelist(f'percolating Graphs/n_{n}')
+    # flag = True
+    # for G in graphs:
+    #     if not G.is_percolating(k_222_plus=True):
+    #         added_edges = 1
+    #         non_edges = list(nx.non_edges(G.graph))
+    #         while True:
+    #             for edges_to_add in itertools.combinations(non_edges, added_edges):
+    #                 for u,v in edges_to_add:
+    #                     G.graph.add_edge(u,v)
+    #                 if G.is_percolating(k_222_plus=True):
+    #                     print(f"Graph required {added_edges} additional edges to become k_222+ percolating.")
+    #                     break
+    #
+    #             added_edges += 1
+    # print("All graphs are k_{2,2,2}^+ percolating!" if flag else "Some graphs are not k_{2,2,2}^+ percolating.")
+    G = nx.complete_graph(5)
+    print(nx.to_latex(G))
 
 
 
