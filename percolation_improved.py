@@ -3,7 +3,7 @@ import networkx as nx
 import random
 
 import numpy as np
-from networkx.classes import non_edges
+from networkx.classes import non_edges, degree
 
 from Graphs import PercolationGraph
 import os
@@ -447,40 +447,23 @@ if __name__ == "__main__":
     # result, wits = graph.is_percolating(k_222_plus=False, document_steps=True)
     # print(f'Percolated: {result}, Witnesses: {wits}')
 
+    all_rigid = True
 
-    G = nx.Graph()
+    base = nx.complete_multipartite_graph(2,2,2)
+    base.add_node(6)
+    for neighbors in itertools.combinations([0,1,2,3,4,5], 4):
+        G = base.copy()
+        G.add_edges_from([(6, v) for v in neighbors])
+        for edge in G.edges():
+            H = G.copy()
+            H.remove_edge(*edge)
+            graph = Graph(H)
+            print(f'Checking edge {edge} removal: ', end='')
+            answer, deg = graph.is_rigid(return_rank=True)
+            print(f'Rigid: {answer}, Rank: {deg}')
+            all_rigid = all_rigid and answer
 
-    # nodes
-    G.add_nodes_from([0, 1, 2, 3, 4, 5, 6, 7, 8])
+    print(f'All rigid after single edge removal: {all_rigid}')
 
-    # edges
-    G.add_edges_from([
-        (0, 2), (0, 3), (0, 4), (0, 5),
-        (1, 2), (1, 3), (1, 4), (1, 5),
-        (2, 4), (2, 5),
-        (3, 4), (3, 5),
-
-        (6, 7), (7, 8), (6, 8),
-        (0, 6), (0, 8),
-        (1, 7), (1, 8),
-        (2, 6), (2, 7),
-    ])
-
-    G.add_edges_from([(6,9), (7,9), (8,9), (9,10),
-                      (6,10), (7,10), (8,10)])
-
-    print(G.subgraph([6,7,8,9,10]).number_of_edges())
-
-    graph = Graph(G)
-    is_rigid, rank = graph.is_rigid(return_rank=True)
-    print(f'Graph is rigid: {is_rigid}, rank: {rank}')
-    nx.draw(G, with_labels=True)
-    plt.show()
-    G.remove_edge(0,4)
-    graph = Graph(G)
-    is_rigid, rank = graph.is_rigid(return_rank=True)
-    print(f'Graph is rigid: {is_rigid}, rank: {rank}')
-    nx.draw(G, with_labels=True)
-    plt.show()
 
 
