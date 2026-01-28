@@ -206,7 +206,7 @@ class PercolationGraph(nx.Graph):
 
         return None, None
 
-    def is_rigid(self):
+    def is_rigid(self, return_rigidity_matrix=False, return_rank=False):
         n = self.number_of_nodes()
         m = self.number_of_edges()
 
@@ -224,6 +224,14 @@ class PercolationGraph(nx.Graph):
 
         # Rank test for rigidity:
         rank = np.linalg.matrix_rank(R)
+        if return_rank:
+            if return_rigidity_matrix:
+                return rank == 3 * n - 6, R, rank
+            # maximal infinitesimal rigidity rank in R^3:
+            return rank == 3 * n - 6, rank
+
+        if return_rigidity_matrix:
+            return rank == 3 * n - 6, R
         # maximal infinitesimal rigidity rank in R^3:
         return rank == 3 * n - 6
 

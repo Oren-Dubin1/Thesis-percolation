@@ -7,8 +7,10 @@ from networkx.classes import non_edges
 
 from Graphs import PercolationGraph
 import os
-
+import matplotlib.pyplot as plt
 from double_percolations import DoublePercolation
+import os
+
 
 
 def read_graphs_from_edgelist(path):
@@ -99,6 +101,8 @@ def sample_3n_6(n, seed=None):
 
     graph = Graph(G)
     return graph
+
+
 
 def run_percolation_experiments(n=None,
                                 seed=None,
@@ -258,7 +262,7 @@ class Graph:
         self.local_addition_matrix = L
         return L
 
-    def is_percolating_one_step(self, return_vertices=True, k_222_plus=False):
+    def is_percolating_one_step(self, return_witness=False, k_222_plus=False):
         # Check if there exists a triangle in the helper matrix with weights 3,4,4
         # If k_222_plus is True, check if graph is k_222+ percolating
         H = self.helper_matrix
@@ -307,15 +311,21 @@ class Graph:
                         for u in A:
                             for v in B:
                                 if not self.graph.has_edge(u, v):
-                                    if return_vertices:
+                                    if not return_witness:
                                         return u,v
                                     else:
-                                        return True
+                                        return (u, v) , (nodes[i], nodes[j], nodes[k])
 
 
         return None
 
-    def is_percolating(self, k_222_plus=False, print_steps=False):
+    def is_percolating(self,
+                       k_222_plus=False,
+                       print_steps=False,
+                       return_final_graph=False,
+                       document_steps=False):
+
+        assert not (k_222_plus and document_steps), "If k_222_plus is True, document_steps must be False."
         if self.n < 6:
             raise ValueError("Graph must have at least 6 vertices to check for k_222 percolation.")
         # Check if the graph is percolating by checking all possible edge additions
@@ -323,11 +333,20 @@ class Graph:
         if L is None:
             L = self.set_local_addition_matrix()
 
+        witnesses = []
+        order_of_additions = []
+
 
         while True:
-            result = self.is_percolating_one_step(k_222_plus=k_222_plus)
+            result = self.is_percolating_one_step(k_222_plus=k_222_plus, return_witness=document_steps)
             if result is None:
                 break  # No more percolating configurations found
+
+            if document_steps:
+                result, witness = result
+                order_of_additions.append(result)
+                # witness is a tuple of frozensets representing the pairs involved. Add as a simple tuple of tuples.
+                witnesses.append((*list(witness[0]),*list(witness[1]), *list(witness[2])))
 
             if k_222_plus:
                 p1, p2, p3 = result
@@ -350,14 +369,23 @@ class Graph:
                 print(f"Added edge ({u}, {v}) for percolation.")
 
         percolated = self.graph.number_of_edges() == self.n * (self.n - 1) // 2
+        if return_final_graph:
+            final_graph = self.graph.copy()
+            # Restore original graph and helper matrix
+            self.restore_graph()
+            if document_steps:
+                return percolated, final_graph, order_of_additions, witnesses
+            return percolated, final_graph
         # Restore original graph and helper matrix
         self.restore_graph()
+        if document_steps:
+            return percolated, order_of_additions, witnesses
         return percolated
 
 
 
-    def is_rigid(self):
-        return PercolationGraph(self.graph).is_rigid()
+    def is_rigid(self, return_rigidity_matrix=False, return_rank=False):
+        return PercolationGraph(self.graph).is_rigid(return_rigidity_matrix=return_rigidity_matrix, return_rank=return_rank)
 
     def is_k5_percolating(self, return_final_graph=False):
         return PercolationGraph(self.graph).is_k5_percolating(return_final_graph=return_final_graph)
@@ -404,32 +432,31 @@ class Graph:
         self.helper_matrix = H_original.copy()
         return percolated
 
-
+    def edge_percolates_in_process(self, edge: tuple[int, int], k222_plus: bool=False) -> bool:
+        # Not optimized - it would be better to stop the percolation process as soon as the edge is added
+        assert edge not in self.graph.edges(), "Edge is already present in the graph."
+        result, order, wits = self.is_percolating(k_222_plus=k222_plus, document_steps=True)
+        return edge in order
 
 
 
 if __name__ == "__main__":
-    n = 7
+    n = 13
     # run_percolation_experiments(n=n, max_tries=10000, output_dir='Double percolating Graphs', double_percolation=True)
-    # graphs = read_graphs_from_edgelist(f'percolating Graphs/n_{n}')
-    # flag = True
-    # for G in graphs:
-    #     if not G.is_percolating(k_222_plus=True):
-    #         added_edges = 1
-    #         non_edges = list(nx.non_edges(G.graph))
-    #         while True:
-    #             for edges_to_add in itertools.combinations(non_edges, added_edges):
-    #                 for u,v in edges_to_add:
-    #                     G.graph.add_edge(u,v)
-    #                 if G.is_percolating(k_222_plus=True):
-    #                     print(f"Graph required {added_edges} additional edges to become k_222+ percolating.")
-    #                     break
-    #
-    #             added_edges += 1
-    # print("All graphs are k_{2,2,2}^+ percolating!" if flag else "Some graphs are not k_{2,2,2}^+ percolating.")
-    G = nx.complete_graph(5)
-    print(nx.to_latex(G))
+    # graph = read_graphs_from_edgelist(f'percolating Graphs/n_{n}')[0]
+    # result, wits = graph.is_percolating(k_222_plus=False, document_steps=True)
+    # print(f'Percolated: {result}, Witnesses: {wits}')
 
 
-
-
+    G = nx.complete_multipartite_graph(2,2,2)
+    # create a clique on the vertices 6,7,8,9
+    G.add_edges_from([(6,7), (6,8), (6,9), (7,8), (7,9), (8,9)])
+    G.add_edges_from([(0,6), (0,7), (0,9), (1,6), (1,8), (1,9)])
+    # nx.draw(G, with_labels=True)
+    # plt.show()
+    G = Graph(G)
+    rigid, rank = G.is_rigid(return_rank=True)
+    print(f'Rigid: {rigid}, Rank: {rank}')
+    G.graph.remove_edge(2,5)
+    rigid, rank = G.is_rigid(return_rank=True)
+    print(f'Rigid: {rigid}, Rank: {rank}')

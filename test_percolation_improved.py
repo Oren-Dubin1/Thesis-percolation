@@ -265,5 +265,41 @@ class TestPercolationImproved(unittest.TestCase):
         except ValueError:
             pass  # Test passes if exception is raised
 
+    def test_is_percolating_witness(self):
+        G = nx.complete_multipartite_graph(2,2,2)
+        G.remove_edge(0,3)
+        graph_obj = Graph(graph=G)
+        percolates, order_of_additions, witness = graph_obj.is_percolating(document_steps=True)
+        self.assertEqual(order_of_additions, [(0,3)])
+        self.assertFalse(percolates)
+        self.assertEqual(witness, [(0,1,2,3,4,5)])
+
+        G.add_edge(0,1)
+        graph_obj = Graph(graph=G)
+        percolates, order_of_additions, witness = graph_obj.is_percolating(document_steps=True)
+        self.assertTrue(percolates)
+        self.assertEqual(len(order_of_additions), nx.complement(G).number_of_edges())
+        self.assertIsInstance(witness, list)
+        self.assertIn((0,1,2,3,4,5), witness)
+
+    def test_edge_percolates_in_process(self):
+        G = nx.complete_multipartite_graph(2,2,2)
+        G.remove_edge(0,3)
+        graph_obj = Graph(graph=G)
+        self.assertTrue(graph_obj.edge_percolates_in_process((0,3)))
+        self.assertFalse(graph_obj.edge_percolates_in_process((0,1)))
+
+        G.add_edge(0,1)
+        graph_obj = Graph(graph=G)
+        self.assertTrue(graph_obj.edge_percolates_in_process((0,3)))
+
+        try:
+            graph_obj.edge_percolates_in_process((2,4))
+            self.fail("Expected an exception for edge not in complement")
+        except AssertionError:
+            pass  # Test passes if exception is raised
+
+
+
 if __name__ == '__main__':
     unittest.main()
