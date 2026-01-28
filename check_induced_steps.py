@@ -98,7 +98,7 @@ def check_conj_k222_clique(attempts=100):
 
     G = nx.complete_multipartite_graph(2,2,2)
     K222_edges = list(G.edges())
-    K = nx.complete_graph(7)
+    K = nx.complete_graph(9)
     # Rename K to be disjoint from G
     K = nx.relabel_nodes(K, {i: i + 6 for i in K.nodes()}, copy=False)
     H = nx.compose(G, K)
@@ -107,15 +107,16 @@ def check_conj_k222_clique(attempts=100):
 
     for i in range(attempts):
         print("Attempt", i+1)
-        number_of_edges_to_add = random.randint(4, len(edge_in_cut))
-        edges_to_add = random.sample(edge_in_cut, number_of_edges_to_add)
-        print("Adding edges:", len(edges_to_add))
-        H_temp = H.copy()
-        H_temp.add_edges_from(edges_to_add)
-        graph_obj = Graph(H_temp)
-        result, graph = graph_obj.is_percolating(return_final_graph=True)
-        if not subgraph_is_clique(graph, range(6)):
-            continue
+        while True:
+            number_of_edges_to_add = random.randint(4, len(edge_in_cut))
+            edges_to_add = random.sample(edge_in_cut, number_of_edges_to_add)
+            print("Adding edges:", len(edges_to_add))
+            H_temp = H.copy()
+            H_temp.add_edges_from(edges_to_add)
+            graph_obj = Graph(H_temp)
+            result, graph = graph_obj.is_percolating(return_final_graph=True)
+            if subgraph_is_clique(graph, range(6)):
+                break
 
         __ , rank = graph_obj.is_rigid(return_rank=True)
         for edge in K222_edges:

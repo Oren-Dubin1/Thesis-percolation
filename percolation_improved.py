@@ -448,15 +448,39 @@ if __name__ == "__main__":
     # print(f'Percolated: {result}, Witnesses: {wits}')
 
 
-    G = nx.complete_multipartite_graph(2,2,2)
-    # create a clique on the vertices 6,7,8,9
-    G.add_edges_from([(6,7), (6,8), (6,9), (7,8), (7,9), (8,9)])
-    G.add_edges_from([(0,6), (0,7), (0,9), (1,6), (1,8), (1,9)])
-    # nx.draw(G, with_labels=True)
-    # plt.show()
-    G = Graph(G)
-    rigid, rank = G.is_rigid(return_rank=True)
-    print(f'Rigid: {rigid}, Rank: {rank}')
-    G.graph.remove_edge(2,5)
-    rigid, rank = G.is_rigid(return_rank=True)
-    print(f'Rigid: {rigid}, Rank: {rank}')
+    G = nx.Graph()
+
+    # nodes
+    G.add_nodes_from([0, 1, 2, 3, 4, 5, 6, 7, 8])
+
+    # edges
+    G.add_edges_from([
+        (0, 2), (0, 3), (0, 4), (0, 5),
+        (1, 2), (1, 3), (1, 4), (1, 5),
+        (2, 4), (2, 5),
+        (3, 4), (3, 5),
+
+        (6, 7), (7, 8), (6, 8),
+        (0, 6), (0, 8),
+        (1, 7), (1, 8),
+        (2, 6), (2, 7),
+    ])
+
+    G.add_edges_from([(6,9), (7,9), (8,9), (9,10),
+                      (6,10), (7,10), (8,10)])
+
+    print(G.subgraph([6,7,8,9,10]).number_of_edges())
+
+    graph = Graph(G)
+    is_rigid, rank = graph.is_rigid(return_rank=True)
+    print(f'Graph is rigid: {is_rigid}, rank: {rank}')
+    nx.draw(G, with_labels=True)
+    plt.show()
+    G.remove_edge(0,4)
+    graph = Graph(G)
+    is_rigid, rank = graph.is_rigid(return_rank=True)
+    print(f'Graph is rigid: {is_rigid}, rank: {rank}')
+    nx.draw(G, with_labels=True)
+    plt.show()
+
+
