@@ -325,6 +325,39 @@ class Graph:
                        return_final_graph=False,
                        document_steps=False):
 
+        """Determine whether this graph percolates under the k_{2,2,2} rule.
+
+        This method runs the iterative one-step percolation process until no further
+        edges can be added. In the default (k_222) mode it repeatedly finds a single
+        edge whose addition is forced by a (3,4,4)-weighted triangle in the helper
+        matrix and adds it; in the k_222_plus mode it adds all missing edges among
+        the three pairs involved when a 4,4,4 (or 3,4,4 where allowed) configuration
+        is found.
+
+        Parameters:
+            k_222_plus (bool): If True, use the k_222+ variant which may add multiple
+                edges at once. Default False. Note: cannot be used together with
+                `document_steps` (see below).
+            print_steps (bool): If True, print each edge addition as it occurs.
+            return_final_graph (bool): If True, return a tuple (percolated, final_graph)
+                where `final_graph` is the graph reached after performing all additions.
+            document_steps (bool): If True, return (percolated, order_of_additions, witnesses)
+                documenting the sequence of added edges and the helper-witness triples.
+
+        Returns:
+            bool or tuple: If `return_final_graph` is True returns (percolated, final_graph).
+            If `document_steps` is True returns (percolated, order_of_additions, witnesses).
+            Otherwise returns a single boolean indicating whether the graph became complete.
+
+        Side effects:
+            The method mutates `self.graph` and `self.helper_matrix` during the process but
+            restores the original graph and helper structures before returning.
+
+        Raises:
+            AssertionError: if both `k_222_plus` and `document_steps` are True.
+            ValueError: if the graph has fewer than 6 vertices (percolation is undefined).
+        """
+
         assert not (k_222_plus and document_steps), "If k_222_plus is True, document_steps must be False."
         if self.n < 6:
             raise ValueError("Graph must have at least 6 vertices to check for k_222 percolation.")
@@ -447,23 +480,11 @@ if __name__ == "__main__":
     # result, wits = graph.is_percolating(k_222_plus=False, document_steps=True)
     # print(f'Percolated: {result}, Witnesses: {wits}')
 
-    all_rigid = True
+    G = nx.complete_multipartite_graph(2,2,2)
+    G.add_edges_from([(6,0), (6,1), (6,2), (6,5)])
+    G = Graph(G)
+    print(G.is_percolating())
 
-    base = nx.complete_multipartite_graph(2,2,2)
-    base.add_node(6)
-    for neighbors in itertools.combinations([0,1,2,3,4,5], 4):
-        G = base.copy()
-        G.add_edges_from([(6, v) for v in neighbors])
-        for edge in G.edges():
-            H = G.copy()
-            H.remove_edge(*edge)
-            graph = Graph(H)
-            print(f'Checking edge {edge} removal: ', end='')
-            answer, deg = graph.is_rigid(return_rank=True)
-            print(f'Rigid: {answer}, Rank: {deg}')
-            all_rigid = all_rigid and answer
-
-    print(f'All rigid after single edge removal: {all_rigid}')
 
 
 
