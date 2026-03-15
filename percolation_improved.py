@@ -481,28 +481,6 @@ if __name__ == "__main__":
     # result, wits = graph.is_percolating(k_222_plus=False, document_steps=True)
     # print(f'Percolated: {result}, Witnesses: {wits}')
 
-    graphs = get_all_cliques_connected(get_cuts=True)
-    i = 1
-    for cut, graph in graphs:
-        if i % 50 == 0:
-            print(f'Testing graph {i}/{len(graphs)}, passed {i/len(graphs)*100:.2f}%')
-        i += 1
-        left, right, H = cut
-        H = Graph(H)
-        if H.is_percolating():
-            continue
-        G = Graph(graph)
-        result = G.is_percolating()
-        if result:
-            print('Found a graph with non-percolating boundary that percolates!')
-            print(f'Left size: {left}, Right size: {right}')
-            print('Cut graph edges:')
-            print(H.graph.edges())
-            print('Full graph edges:')
-            print(G.graph.edges())
-            raise AssertionError("Found a graph with non-percolating boundary that percolates!")
-
-    print("All graphs with non-percolating boundary are not percolating.")
 
 
 

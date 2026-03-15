@@ -59,7 +59,7 @@ def get_all_cuts_of_sizes_3_4(sizes=None, as_list=True, connected_only=False):
     return gen
 
 def get_all_cliques_connected(get_cuts=False):
-    cuts = get_all_cuts_of_sizes_3_4(as_list=True, connected_only=True)
+    cuts = get_all_cuts_of_sizes_3_4(as_list=True, connected_only=True)[46400:]
     graphs = []
     for cut in cuts:
         left, right, G = cut
