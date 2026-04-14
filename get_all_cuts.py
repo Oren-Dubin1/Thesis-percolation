@@ -21,7 +21,7 @@ def get_all_cuts_of_sizes_3_4(sizes=None, as_list=True, connected_only=False):
     """
 
     if sizes is None:
-        sizes = [(3, 3), (3, 4), (4, 3), (4, 4)]
+        sizes = [(4, 4), (3, 3), (3, 4), (4, 3)]
 
     def generate():
         for left, right in sizes:
@@ -89,6 +89,35 @@ if __name__ == "__main__":
     # print(f'Percolated: {result}, Witnesses: {wits}')
 
     graphs = get_all_cliques_connected(get_cuts=True)
+    G = nx.disjoint_union(nx.complete_graph(4), nx.complete_graph(4))
+
+    # your existing edges
+    G.add_edges_from([
+        (0, 4), (0, 5), (0, 6),
+        (1, 4), (2, 4),
+        (3, 7)
+    ])
+
+    H = G.copy()
+
+    # --- add 3 vertices to first clique (0–3) ---
+    A_old = [0, 1, 2, 3]
+    A_new = [8]
+    G.add_nodes_from(A_new)
+
+    # connect new vertices into the clique
+    G.add_edges_from((u, v) for i, u in enumerate(A_new) for v in A_new[i + 1:])  # between new
+    G.add_edges_from((u, v) for u in A_new for v in A_old)  # to old
+
+    # --- add 3 vertices to second clique (4–7) ---
+    B_old = [4, 5, 6, 7]
+    B_new = [11]
+    G.add_nodes_from(B_new)
+
+    G.add_edges_from((u, v) for i, u in enumerate(B_new) for v in B_new[i + 1:])
+    G.add_edges_from((u, v) for u in B_new for v in B_old)
+    graphs[0] = ((4,4, H) ,G)
+    print('Got all cliques.')
     i = 1
     for cut, graph in graphs:
         if i % 50 == 0:

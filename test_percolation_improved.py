@@ -107,13 +107,19 @@ class TestPercolationImproved(unittest.TestCase):
         graph = Graph(G)
         self.assertFalse(graph.is_rigid())
 
-        G = nx.complete_graph(200)
-        G.add_edges_from([(200,0), (200,4)])
+        G = nx.complete_graph(100)
+        G.add_edges_from([(100,0), (100,4)])
         graph = Graph(G, build_helper=False)
         self.assertFalse(graph.is_rigid())
-        graph.graph.add_edge(200,100)
+        graph.graph.add_edge(100,50)
 
         self.assertTrue(graph.is_rigid())
+        G.add_edge(100, 50)
+        G.add_edges_from([(500, 0), (500, 1), (500,2)])
+        G.add_node('x')
+        G.add_edges_from([('x', 0), ('x', 1), ('x',2)])
+        self.assertTrue(Graph(G).is_rigid())
+
 
     def test_is_k5_percolating(self):
         # Test 1: K5 minus one edge – should percolate

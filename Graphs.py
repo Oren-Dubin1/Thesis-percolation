@@ -210,6 +210,10 @@ class PercolationGraph(nx.Graph):
         n = self.number_of_nodes()
         m = self.number_of_edges()
 
+        # Map arbitrary node labels to contiguous indices for matrix assembly.
+        nodes = list(self.nodes())
+        node_to_idx = {node: idx for idx, node in enumerate(nodes)}
+
         # Random generic positions in R^3
         P = np.random.random((n, 3))
 
@@ -217,10 +221,12 @@ class PercolationGraph(nx.Graph):
         R = np.zeros((m, 3 * n))
 
         for row_idx, (u, v) in enumerate(self.edges()):
+            u_idx = node_to_idx[u]
+            v_idx = node_to_idx[v]
             # vector difference in R^3
-            diff = P[u] - P[v]  # shape (3,)
-            R[row_idx, 3 * u: 3 * u + 3] = diff
-            R[row_idx, 3 * v: 3 * v + 3] = -diff
+            diff = P[u_idx] - P[v_idx]  # shape (3,)
+            R[row_idx, 3 * u_idx: 3 * u_idx + 3] = diff
+            R[row_idx, 3 * v_idx: 3 * v_idx + 3] = -diff
 
         # Rank test for rigidity:
         rank = np.linalg.matrix_rank(R)
@@ -263,21 +269,8 @@ class PercolationGraph(nx.Graph):
 
 
 if __name__ == "__main__":
-    G = PercolationGraph(nx.Graph())
-    G.add_edges_from([(0,2), (0,3), (0,4)])
-    G.add_edges_from([(1,2), (1,3), (1,4), (1,5), (1,6), (1,7)])
-    G.add_edges_from([(2,3), (2,5), (2,6)])
-    G.add_edges_from([(3,4), (3,7)])
-    G.add_edges_from([(4,5), (4,6)])
-    G.add_edge(6,7)
-    G.print_graph()
-    answer, graph = G.is_k222_percolating(return_final_graph=True)
-    print("Is graph with v Percolating?", answer)
-    print('Final graph has edge (7,5)???', graph.has_edge(7,5))
-    G.remove_node(0)
-    answer, graph = G.is_k222_percolating(return_final_graph=True)
-    print("Is graph without v Percolating?", answer)
-    print('Final graph has edge (7,5)???', graph.has_edge(7,5))
+
+    pass
 
 
 
