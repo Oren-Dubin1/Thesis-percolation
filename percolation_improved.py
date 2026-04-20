@@ -6,9 +6,8 @@ import numpy as np
 from networkx.classes import non_edges, degree
 
 from Graphs import PercolationGraph
-import os
-import matplotlib.pyplot as plt
-from double_percolations import DoublePercolation
+from networkx.algorithms import isomorphism as iso
+
 import os
 
 
@@ -264,8 +263,7 @@ class Graph:
         return L
 
     def is_percolating_one_step(self, return_witness=False, k_222_plus=False):
-        # Check if there exists a triangle in the helper matrix with weights 3,4,4
-        # If k_222_plus is True, check if graph is k_222+ percolating
+        # Detect weighted helper-triangles using subgraph isomorphism.
         H = self.helper_matrix
         if H is None:
             H = self.build_helper_matrix()
@@ -274,48 +272,79 @@ class Graph:
             self.build_marked_vertices()
 
         size = H.shape[0]
+        helper_graph = nx.Graph()
+        helper_graph.add_nodes_from(range(size))
         for i in range(size):
             for j in range(i + 1, size):
-                for k in range(j + 1, size):
-                    w1 = H[i][j]
-                    w2 = H[j][k]
-                    w3 = H[k][i]
-                    weights = sorted([w1, w2, w3])
-                    if weights == [4,4,4] and k_222_plus:
-                        # Ensure there is at least one edge to be added
-                        if self.marked_vertices[i] and self.marked_vertices[j] and self.marked_vertices[k]:
-                            continue
+                w = int(H[i][j])
+                if w > 0:
+                    helper_graph.add_edge(i, j, weight=w)
 
-                        nodes = list(self.index_map.keys())
-                        return nodes[i], nodes[j], nodes[k]
+        edge_match = iso.categorical_edge_match('weight', None)
 
-                    if weights == [3, 4, 4]:
-                        nodes = list(self.index_map.keys())
-                        if k_222_plus:
-                            # Ensure at least one vertex in the triangle is marked
-                            if self.marked_vertices[i] or self.marked_vertices[j] or self.marked_vertices[k]:
-                                return nodes[i], nodes[j], nodes[k]
+        pattern_344 = nx.Graph()
+        pattern_344.add_edge(0, 1, weight=3)
+        pattern_344.add_edge(1, 2, weight=4)
+        pattern_344.add_edge(2, 0, weight=4)
 
-                            else:
-                                continue
+        pattern_444 = nx.Graph()
+        pattern_444.add_edge(0, 1, weight=4)
+        pattern_444.add_edge(1, 2, weight=4)
+        pattern_444.add_edge(2, 0, weight=4)
 
-                        if w1 == 3:
-                            A = nodes[i]
-                            B = nodes[j]
-                        elif w2 == 3:
-                            A = nodes[j]
-                            B = nodes[k]
-                        else:
-                            A = nodes[k]
-                            B = nodes[i]
+        def matched_triangles(pattern):
+            matcher = iso.GraphMatcher(helper_graph, pattern, edge_match=edge_match)
+            if not matcher.subgraph_is_isomorphic():
+                return set()
 
-                        for u in A:
-                            for v in B:
-                                if not self.graph.has_edge(u, v):
-                                    if not return_witness:
-                                        return u,v
-                                    else:
-                                        return (u, v) , (nodes[i], nodes[j], nodes[k])
+            triangles = set()
+            for mapping in matcher.subgraph_isomorphisms_iter():
+                tri = tuple(sorted(mapping.keys()))
+                if len(tri) == 3:
+                    triangles.add(tri)
+            return triangles
+
+        candidates_344 = matched_triangles(pattern_344)
+        candidates_444 = matched_triangles(pattern_444) if k_222_plus else set()
+
+        nodes = list(self.index_map.keys())
+        for i, j, k in sorted(candidates_344 | candidates_444):
+            w1 = H[i][j]
+            w2 = H[j][k]
+            w3 = H[k][i]
+            weights = sorted([w1, w2, w3])
+
+            if weights == [4, 4, 4] and k_222_plus:
+                # Ensure there is at least one edge to be added
+                if self.marked_vertices[i] and self.marked_vertices[j] and self.marked_vertices[k]:
+                    continue
+                return nodes[i], nodes[j], nodes[k]
+
+            if weights != [3, 4, 4]:
+                continue
+
+            if k_222_plus:
+                # Ensure at least one vertex in the triangle is marked
+                if self.marked_vertices[i] or self.marked_vertices[j] or self.marked_vertices[k]:
+                    return nodes[i], nodes[j], nodes[k]
+                continue
+
+            if w1 == 3:
+                A = nodes[i]
+                B = nodes[j]
+            elif w2 == 3:
+                A = nodes[j]
+                B = nodes[k]
+            else:
+                A = nodes[k]
+                B = nodes[i]
+
+            for u in A:
+                for v in B:
+                    if not self.graph.has_edge(u, v):
+                        if not return_witness:
+                            return u, v
+                        return (u, v), (nodes[i], nodes[j], nodes[k])
 
 
         return None
@@ -475,11 +504,15 @@ class Graph:
 
 
 if __name__ == "__main__":
-    n = 13
-    # run_percolation_experiments(n=n, max_tries=10000, output_dir='Double percolating Graphs', double_percolation=True)
-    # graph = read_graphs_from_edgelist(f'percolating Graphs/n_{n}')[0]
-    # result, wits = graph.is_percolating(k_222_plus=False, document_steps=True)
-    # print(f'Percolated: {result}, Witnesses: {wits}')
+    import networkx as nx
+
+    G = nx.complete_graph(10)  # K10
+    H = nx.cycle_graph(6)  # C6
+
+    GM = iso.GraphMatcher(G, H)
+
+    print(GM.subgraph_is_isomorphic())  # False
+    print(GM.subgraph_is_monomorphic())  # True
 
 
 
