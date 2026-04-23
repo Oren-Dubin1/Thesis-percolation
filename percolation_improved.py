@@ -1,14 +1,39 @@
 import itertools
 import networkx as nx
-import random
-
 import numpy as np
-from networkx.classes import non_edges, degree
-
 from Graphs import PercolationGraph
 from networkx.algorithms import isomorphism as iso
-
 import os
+from networkx.algorithms import isomorphism
+import time
+import statistics
+import random
+
+
+def is_subgraph_isomorphic(G, H):
+    GM = isomorphism.GraphMatcher(G, H)
+    return GM.subgraph_is_isomorphic()
+
+def get_subgraph_mapping(G, H):
+    GM = isomorphism.GraphMatcher(G, H)
+    mapping = next(GM.subgraph_isomorphisms_iter(), None)
+    return None if mapping is None else dict(map(reversed, mapping.items()))
+
+def get_k222_subgraph_mapping(G):
+    k222minus = nx.complete_multipartite_graph(2,2,2)
+    missing_edge = (0,2)
+    k222minus.remove_edge(*missing_edge)
+    edges_to_add = [None, (0,1), (2,3), (4,5)]
+    for e in edges_to_add:
+        if e is not None:
+            k222minus.add_edge(*e)
+        mapping = get_subgraph_mapping(G, k222minus)
+        if mapping is not None:
+            return mapping, missing_edge
+
+
+    return None, missing_edge
+
 
 
 
@@ -349,7 +374,124 @@ class Graph:
 
         return None
 
+
     def is_percolating(self,
+                      print_steps=False,
+                      return_final_graph=False,
+                      document_steps=False):
+        """
+        Faster k222 percolation check using repeated subgraph matching to K222 minus one edge.
+
+        Parameters
+        ----------
+        print_steps : bool
+            If True, print each added edge.
+        return_final_graph : bool
+            If True, return (percolated, final_graph) or
+            (percolated, final_graph, order_of_additions, witnesses) when document_steps=True.
+        document_steps : bool
+            If True, return addition order and match witnesses.
+
+        Returns
+        -------
+        bool or tuple
+            Same return-style as is_percolating.
+        """
+        if self.n < 6:
+            raise ValueError("Graph must have at least 6 vertices to check for k_222 percolation.")
+
+        order_of_additions = []
+        witnesses = []
+
+        while True:
+            mapping, missing_edge = get_k222_subgraph_mapping(self.graph)
+            if mapping is None:
+                break
+
+            u, v = mapping[missing_edge[0]], mapping[missing_edge[1]]
+            if self.graph.has_edge(u, v):
+                # Should be rare, but skip safely if mapping gives an already-present edge.
+                continue
+
+            self.graph.add_edge(u, v)
+
+            if print_steps:
+                print(f"Added edge ({u}, {v}) for fast percolation.")
+
+            if document_steps:
+                order_of_additions.append((u, v))
+                # Store the matched 6-tuple (pattern node -> graph node) as witness.
+                witnesses.append(tuple(mapping[i] for i in range(6)))
+
+        percolated = self.graph.number_of_edges() == self.n * (self.n - 1) // 2
+
+        if return_final_graph:
+            final_graph = self.graph.copy()
+            self.restore_graph()
+            if document_steps:
+                return percolated, final_graph, order_of_additions, witnesses
+            return percolated, final_graph
+
+        self.restore_graph()
+        if document_steps:
+            return percolated, order_of_additions, witnesses
+        return percolated
+
+    def is_rigid(self, return_rigidity_matrix=False, return_rank=False):
+        return PercolationGraph(self.graph).is_rigid(return_rigidity_matrix=return_rigidity_matrix, return_rank=return_rank)
+
+    def is_k5_percolating(self, return_final_graph=False):
+        return PercolationGraph(self.graph).is_k5_percolating(return_final_graph=return_final_graph)
+
+
+    def is_k5_percolating_one_step(self, return_edge):
+        for nodes in itertools.combinations(self.graph.nodes, 5):
+            if self.graph.subgraph(nodes).number_of_edges() == 9:
+                if not return_edge:
+                    return True
+
+                for u in nodes:
+                    for v in nodes:
+                        if u != v and not self.graph.has_edge(u,v):
+                            return u, v
+        return None
+
+
+    def is_double_percolating(self):
+        # Check if the graph is percolating by checking all possible edge additions
+        L = self.local_addition_matrix
+        if L is None:
+            L = self.set_local_addition_matrix()
+        H_original = self.helper_matrix
+        if H_original is None:
+            H_original = self.build_helper_matrix()
+
+        while True:
+            result = self.is_k5_percolating_one_step(return_edge=True)
+            if result is None:
+                result = self.is_percolating_one_step()
+
+            if result is None:
+                break
+
+            u, v = result
+            # Update helper matrix
+            self.helper_matrix += L[(u, v)]
+            self.graph.add_edge(u, v)
+
+        percolated = self.graph.number_of_edges() == self.n * (self.n - 1) // 2
+        # Restore original graph and helper matrix
+        self.graph = self.original_graph.copy()
+        self.helper_matrix = H_original.copy()
+        return percolated
+
+    def edge_percolates_in_process(self, edge: tuple[int, int]) -> bool:
+        # Not optimized - it would be better to stop the percolation process as soon as the edge is added
+        assert edge not in self.graph.edges(), "Edge is already present in the graph."
+        result, order, wits = self.is_percolating(document_steps=True)
+        return edge in order
+
+    def is_percolating_slow(self,
                        k_222_plus=False,
                        print_steps=False,
                        return_final_graph=False,
@@ -445,107 +587,7 @@ class Graph:
             return percolated, order_of_additions, witnesses
         return percolated
 
-    def is_percolating_faster(self):
-        pass
-
-
-    def is_rigid(self, return_rigidity_matrix=False, return_rank=False):
-        return PercolationGraph(self.graph).is_rigid(return_rigidity_matrix=return_rigidity_matrix, return_rank=return_rank)
-
-    def is_k5_percolating(self, return_final_graph=False):
-        return PercolationGraph(self.graph).is_k5_percolating(return_final_graph=return_final_graph)
-
-
-    def is_k5_percolating_one_step(self, return_edge):
-        for nodes in itertools.combinations(self.graph.nodes, 5):
-            if self.graph.subgraph(nodes).number_of_edges() == 9:
-                if not return_edge:
-                    return True
-
-                for u in nodes:
-                    for v in nodes:
-                        if u != v and not self.graph.has_edge(u,v):
-                            return u, v
-        return None
-
-
-    def is_double_percolating(self):
-        # Check if the graph is percolating by checking all possible edge additions
-        L = self.local_addition_matrix
-        if L is None:
-            L = self.set_local_addition_matrix()
-        H_original = self.helper_matrix
-        if H_original is None:
-            H_original = self.build_helper_matrix()
-
-        while True:
-            result = self.is_k5_percolating_one_step(return_edge=True)
-            if result is None:
-                result = self.is_percolating_one_step()
-
-            if result is None:
-                break
-
-            u, v = result
-            # Update helper matrix
-            self.helper_matrix += L[(u, v)]
-            self.graph.add_edge(u, v)
-
-        percolated = self.graph.number_of_edges() == self.n * (self.n - 1) // 2
-        # Restore original graph and helper matrix
-        self.graph = self.original_graph.copy()
-        self.helper_matrix = H_original.copy()
-        return percolated
-
-    def edge_percolates_in_process(self, edge: tuple[int, int], k222_plus: bool=False) -> bool:
-        # Not optimized - it would be better to stop the percolation process as soon as the edge is added
-        assert edge not in self.graph.edges(), "Edge is already present in the graph."
-        result, order, wits = self.is_percolating(k_222_plus=k222_plus, document_steps=True)
-        return edge in order
-
-
 
 if __name__ == "__main__":
-    import networkx as nx
-    from itertools import combinations
-
-
-    def k6n_with_k222_on_left(n: int) -> nx.Graph:
-        G = nx.Graph()
-
-        # Left side: 6 vertices, arranged as three pairs
-        left = [f"L{i}" for i in range(6)]
-        right = [f"R{i}" for i in range(n)]
-
-        # Optional: mark bipartition
-        G.add_nodes_from(left, bipartite=0)
-        G.add_nodes_from(right, bipartite=1)
-
-        # Add all edges of K_{6,n}
-        for u in left:
-            for v in right:
-                G.add_edge(u, v)
-
-        # Partition the 6 left vertices into 3 parts of size 2
-        parts = [
-            [left[0], left[1]],
-            [left[2], left[3]],
-            [left[4], left[5]],
-        ]
-
-        # Add K_{2,2,2} on the left side:
-        # connect vertices from different parts, but not within a part
-        for A, B in combinations(parts, 2):
-            for u in A:
-                for v in B:
-                    G.add_edge(u, v)
-
-        return G
-
-    G = nx.complete_multipartite_graph(5,5)
-    graph = Graph(G)
-    print(G)
-    print("Is percolating:", graph.is_percolating())
-    print('Is rigid:', graph.is_rigid())
-
+    pass
 
