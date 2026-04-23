@@ -445,6 +445,9 @@ class Graph:
             return percolated, order_of_additions, witnesses
         return percolated
 
+    def is_percolating_faster(self):
+        pass
+
 
     def is_rigid(self, return_rigidity_matrix=False, return_rank=False):
         return PercolationGraph(self.graph).is_rigid(return_rigidity_matrix=return_rigidity_matrix, return_rank=return_rank)
