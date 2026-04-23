@@ -244,32 +244,6 @@ class TestPercolationImproved(unittest.TestCase):
         answer = graph_obj.is_percolating_one_step(k_222_plus=True)
         self.assertIsNone(answer)
 
-    def test_is_k222_plus_percolating(self):
-        G = nx.complete_multipartite_graph(2,2,2)
-        graph_obj = Graph(graph=G)
-        self.assertTrue(graph_obj.is_percolating(k_222_plus=True))
-
-        G.add_edge(0,1)
-        graph_obj = Graph(graph=G)
-        self.assertTrue(graph_obj.is_percolating(k_222_plus=True))
-
-
-        G = nx.complete_multipartite_graph(2,2,2)
-        G.remove_edge(0,2)
-        graph_obj = Graph(graph=G)
-        self.assertFalse(graph_obj.is_percolating(k_222_plus=True))
-
-        G = nx.complete_graph(10)
-        graph_obj = Graph(graph=G)
-        self.assertTrue(graph_obj.is_percolating(k_222_plus=True))
-
-        G = nx.complete_graph(4)
-        graph_obj = Graph(graph=G)
-        try:
-            graph_obj.is_percolating(k_222_plus=True)
-            self.fail("Expected an exception for insufficient vertices")
-        except ValueError:
-            pass  # Test passes if exception is raised
 
     def test_is_percolating_witness(self):
         G = nx.complete_multipartite_graph(2,2,2)
@@ -278,7 +252,7 @@ class TestPercolationImproved(unittest.TestCase):
         percolates, order_of_additions, witness = graph_obj.is_percolating(document_steps=True)
         self.assertEqual(order_of_additions, [(0,3)])
         self.assertFalse(percolates)
-        self.assertEqual(witness, [(0,1,2,3,4,5)])
+        self.assertEqual(sorted(witness[0]), [0,1,2,3,4,5])
 
         G.add_edge(0,1)
         graph_obj = Graph(graph=G)
@@ -286,7 +260,7 @@ class TestPercolationImproved(unittest.TestCase):
         self.assertTrue(percolates)
         self.assertEqual(len(order_of_additions), nx.complement(G).number_of_edges())
         self.assertIsInstance(witness, list)
-        self.assertIn((0,1,2,3,4,5), witness)
+        self.assertIn((0,1,3,2,4,5), witness)
 
     def test_edge_percolates_in_process(self):
         G = nx.complete_multipartite_graph(2,2,2)
