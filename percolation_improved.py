@@ -446,7 +446,6 @@ class Graph:
         return percolated
 
 
-
     def is_rigid(self, return_rigidity_matrix=False, return_rank=False):
         return PercolationGraph(self.graph).is_rigid(return_rigidity_matrix=return_rigidity_matrix, return_rank=return_rank)
 
@@ -505,15 +504,45 @@ class Graph:
 
 if __name__ == "__main__":
     import networkx as nx
-
-    G = nx.complete_graph(10)  # K10
-    H = nx.cycle_graph(6)  # C6
-
-    GM = iso.GraphMatcher(G, H)
-
-    print(GM.subgraph_is_isomorphic())  # False
-    print(GM.subgraph_is_monomorphic())  # True
+    from itertools import combinations
 
 
+    def k6n_with_k222_on_left(n: int) -> nx.Graph:
+        G = nx.Graph()
+
+        # Left side: 6 vertices, arranged as three pairs
+        left = [f"L{i}" for i in range(6)]
+        right = [f"R{i}" for i in range(n)]
+
+        # Optional: mark bipartition
+        G.add_nodes_from(left, bipartite=0)
+        G.add_nodes_from(right, bipartite=1)
+
+        # Add all edges of K_{6,n}
+        for u in left:
+            for v in right:
+                G.add_edge(u, v)
+
+        # Partition the 6 left vertices into 3 parts of size 2
+        parts = [
+            [left[0], left[1]],
+            [left[2], left[3]],
+            [left[4], left[5]],
+        ]
+
+        # Add K_{2,2,2} on the left side:
+        # connect vertices from different parts, but not within a part
+        for A, B in combinations(parts, 2):
+            for u in A:
+                for v in B:
+                    G.add_edge(u, v)
+
+        return G
+
+    G = nx.complete_multipartite_graph(5,5)
+    graph = Graph(G)
+    print(G)
+    print("Is percolating:", graph.is_percolating())
+    print('Is rigid:', graph.is_rigid())
 
 

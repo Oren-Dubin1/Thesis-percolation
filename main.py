@@ -3,6 +3,8 @@ import itertools
 from networkx.generators.atlas import graph_atlas_g
 import sys
 import contextlib
+from networkx.algorithms import isomorphism as iso
+
 
 def all_graphs_leq_n_nodes(n):
     """Generate all unlabeled graphs on <= n vertices (brute force, for small n)."""
@@ -123,8 +125,17 @@ def check_vertex_graphs_with_degree3_extension(num_nodes=6):
 
 
 if __name__ == '__main__':
-    check_vertex_graphs_with_degree3_extension(7)
+    from pathlib import Path
+    import networkx as nx
 
+    K2minus = nx.complete_multipartite_graph(2, 2, 2)
+    K2minus.remove_edge(0, 2)
 
-# if __name__ == '__main__':
-#     check_vertex_graphs_with_degree3_extension(7)
+    base_dir = Path("percolating graphs")
+
+    for file_path in base_dir.rglob("*.edgelist"):
+        G = nx.read_edgelist(file_path, nodetype=int)
+        GM = iso.GraphMatcher(G, K2minus)
+
+        if GM.subgraph_is_isomorphic():
+            print(file_path)
