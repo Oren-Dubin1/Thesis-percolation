@@ -68,6 +68,7 @@ class TestPercolationImproved(unittest.TestCase):
     def test_read_nonexistent_file_raises(self):
         with self.assertRaises(FileNotFoundError):
             read_graph_from_json("does_not_exist.json")
+
     def test_build_helper_matrix_creates_expected_weights(self):
         # Build graph so pair {0,1} vs {2,3} has three cross edges
         G = nx.Graph()
