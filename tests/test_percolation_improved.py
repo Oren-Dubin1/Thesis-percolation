@@ -11,10 +11,10 @@ class TestPercolationImproved(unittest.TestCase):
         G.add_edge(0, 1)
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            path = os.path.join(tmpdir, "test_graph")
+            path = os.path.join(tmpdir, "test_graph.json")
 
             save_graph_to_json(G, path)
-            loaded = read_graph_from_json(f"{path}.json")
+            loaded = read_graph_from_json(path)
 
             self.assertTrue(nx.is_isomorphic(G, loaded))
             self.assertEqual(loaded.nodes[0]["type"], "original")
@@ -25,20 +25,20 @@ class TestPercolationImproved(unittest.TestCase):
         G = nx.path_graph(3)
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            path = os.path.join(tmpdir, "graph_file")
+            path = os.path.join(tmpdir, "graph_file.json")
 
             save_graph_to_json(G, path)
 
-            self.assertTrue(os.path.exists(f"{path}.json"))
+            self.assertTrue(os.path.exists(path))
 
     def test_empty_graph(self):
         G = nx.Graph()
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            path = os.path.join(tmpdir, "empty")
+            path = os.path.join(tmpdir, "empty.json")
 
             save_graph_to_json(G, path)
-            loaded = read_graph_from_json(f"{path}.json")
+            loaded = read_graph_from_json(path)
 
             self.assertEqual(loaded.number_of_nodes(), 0)
             self.assertEqual(loaded.number_of_edges(), 0)
@@ -50,10 +50,10 @@ class TestPercolationImproved(unittest.TestCase):
         G.add_edge(0, 1, weight=3)
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            path = os.path.join(tmpdir, "attr_graph")
+            path = os.path.join(tmpdir, "attr_graph.json")
 
             save_graph_to_json(G, path)
-            loaded = read_graph_from_json(f"{path}.json")
+            loaded = read_graph_from_json(path)
 
             self.assertEqual(loaded.nodes[0]["type"], "original")
             self.assertEqual(loaded.nodes[0]["color"], "red")
@@ -170,14 +170,14 @@ class TestPercolationImproved(unittest.TestCase):
         graph = Graph(G)
         self.assertFalse(graph.is_rigid())
 
-        G = nx.complete_graph(100)
-        G.add_edges_from([(100,0), (100,4)])
+        G = nx.complete_graph(30)
+        G.add_edges_from([(30,0), (30,4)])
         graph = Graph(G, build_helper=False)
         self.assertFalse(graph.is_rigid())
-        graph.graph.add_edge(100,50)
+        graph.graph.add_edge(30,20)
 
         self.assertTrue(graph.is_rigid())
-        G.add_edge(100, 50)
+        G.add_edge(30, 20)
         G.add_edges_from([(500, 0), (500, 1), (500,2)])
         G.add_node('x')
         G.add_edges_from([('x', 0), ('x', 1), ('x',2)])

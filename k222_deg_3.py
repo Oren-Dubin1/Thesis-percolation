@@ -153,14 +153,23 @@ def check_percolation(number_of_vertices_all_rules):
             raise AssertionError(f"Vertex {v} of type {data['type']} should not be connected to C vertices in the final graph.")
 
     print('Conjecture holds.')
+    save_graph_to_json(final_graph, f"final_graph_{number_of_vertices_all_rules}_vertices_per_rule.json")
 
-    data = json_graph.node_link_data(final_graph)
-    with open("graph.json", "w") as f:
-        json.dump(data, f)
 
+def check_from_computed_graph():
+    G = read_graph_from_json('final_graph_6_vertices_per_rule.json')
+    for v, data in G.nodes(data=True):
+        vertex_type = data["type"]
+        if vertex_type == "original":
+            continue
+
+        H = G.subgraph({0,1,2,3,4,5} | {v})
+        if H.degree(v) != 4:
+            raise AssertionError(f"Vertex {v} does not have degree 4 in the final graph. It has degree {H.degree(v)}.")
 
 
 if __name__ == "__main__":
-    num_vertices = 3
-    check_percolation(num_vertices)
+    num_vertices = 6
+    # check_percolation(num_vertices)
+    check_from_computed_graph()
 

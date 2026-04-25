@@ -39,9 +39,9 @@ def get_k222_subgraph_mapping(G):
 
     return None, missing_edge
 
-def save_graph_to_json(graph, path='graph'):
+def save_graph_to_json(graph, path='graph.json'):
     data = json_graph.node_link_data(graph)
-    with open(f"{path}.json", "w") as f:
+    with open(path, "w") as f:
         json.dump(data, f)
 
 
