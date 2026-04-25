@@ -31,8 +31,9 @@ class K222WithDegree3Vertices:
     def _build_k222(self):
         """Create the base K_{2,2,2}."""
         self.G = nx.complete_multipartite_graph(2,2,2)
+        nx.set_node_attributes(self.G, "original", "type")
 
-    def add_degree3_vertex(self, neighbors):
+    def add_degree3_vertex(self, neighbors, rule=None):
         """
         Add one new vertex connected to exactly 3 existing vertices.
 
@@ -41,6 +42,7 @@ class K222WithDegree3Vertices:
         neighbors : iterable of length 3
             The 3 vertices to connect the new vertex to.
 
+        rule : rule of addition, such as "AAB", saved in vertex data 'type'
         Returns
         -------
         int
@@ -61,32 +63,14 @@ class K222WithDegree3Vertices:
         new_v = self._next_vertex
         self._next_vertex += 1
 
-        self.G.add_node(new_v)
+        self.G.add_node(new_v, type=rule)
         for u in neighbors:
             self.G.add_edge(new_v, u)
 
         return new_v
 
-    def add_many_degree3_vertices(self, attachment_list):
-        """
-        Add many degree-3 vertices.
 
-        Parameters
-        ----------
-        attachment_list : iterable
-            Each entry is an iterable of 3 neighbors.
-
-        Returns
-        -------
-        list[int]
-            The labels of the added vertices.
-        """
-        added = []
-        for neighbors in attachment_list:
-            added.append(self.add_degree3_vertex(neighbors))
-        return added
-
-    def add_vertices_by_rule(self, n_new, rule, seed=None):
+    def add_vertices_by_rule(self, n_new, rule, seed=None, with_random=False):
         """
         Add n_new vertices according to a simple preset rule.
 
@@ -98,7 +82,11 @@ class K222WithDegree3Vertices:
         if seed is not None:
             random.seed(seed)
 
-        random_idx = random.randint(0, 1)
+        if with_random:
+            random_idx = random.randint(0, 1)
+
+        else:
+            random_idx = 0
 
         presets = {
             "AAB": [self.parts["A"][0], self.parts["A"][1], self.parts["B"][random_idx]],
@@ -115,7 +103,7 @@ class K222WithDegree3Vertices:
 
         added = []
         for _ in range(n_new):
-            added.append(self.add_degree3_vertex(presets[rule]))
+            added.append(self.add_degree3_vertex(presets[rule], rule))
         return added
 
     def add_vertices_by_rules(self, numbers_and_rules : tuple[tuple[int, str], ...]):
@@ -149,9 +137,16 @@ def check_percolation(number_of_vertices_all_rules):
     builder.add_vertices_by_all_rules(number_of_vertices_all_rules)
     G = builder.percolation_graph()
     print(G.graph)
-    return G.is_percolating(return_final_graph=True, print_steps=True)
+    return G.is_percolating(print_steps=True, return_final_graph=True)
 
 
 
 if __name__ == "__main__":
-    print(check_percolation(2))
+    num_vertices = 1
+    guess = 12 + 18 * num_vertices + 3 * num_vertices ** 2
+    answer, G = check_percolation(num_vertices)
+    # print(answer)
+    print(guess)
+    print(G.number_of_edges())
+    nx.write_edgelist(G, "k222_deg_3.edgelist", data=False)
+    print(G.nodes[8]['type'])

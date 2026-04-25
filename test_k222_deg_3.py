@@ -52,20 +52,6 @@ class TestK222WithDegree3Vertices(unittest.TestCase):
         self.assertEqual(G.number_of_nodes(), 7)
         self.assertEqual(G.number_of_edges(), 15)
 
-    def test_add_many_degree3_vertices(self):
-        added = self.builder.add_many_degree3_vertices([
-            [0, 2, 4],
-            [1, 3, 5],
-            [0, 3, 4],
-        ])
-        G = self.builder.graph()
-
-        self.assertEqual(added, [6, 7, 8])
-        self.assertEqual(G.number_of_nodes(), 9)
-        self.assertEqual(G.number_of_edges(), 21)
-
-        for v in added:
-            self.assertEqual(G.degree(v), 3)
 
     def test_add_degree3_vertex_requires_exactly_three_neighbors(self):
         with self.assertRaises(ValueError):
@@ -97,7 +83,7 @@ class TestK222WithDegree3Vertices(unittest.TestCase):
             self.builder.add_vertices_by_rule(2, rule="XYZ")
 
     def test_copy_returns_independent_graph(self):
-        self.builder.add_degree3_vertex([0, 2, 4])
+        self.builder.add_degree3_vertex([0, 2, 4], "ABC")
 
         G_copy = self.builder.copy()
         self.assertIsInstance(G_copy, nx.Graph)
