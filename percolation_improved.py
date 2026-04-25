@@ -127,7 +127,6 @@ def sample_3n_6(n, seed=None):
     return graph
 
 
-
 def run_percolation_experiments(n=None,
                                 seed=None,
                                 output_dir='percolating graphs',
@@ -190,6 +189,28 @@ def run_percolation_experiments(n=None,
     return results
 
 
+def check_3n6_conjecture(n, num_tries=1000):
+    for i in range(num_tries):
+        if i % 10 == 0:
+            print(f'Passed {i}/{num_tries}')
+        G = nx.gnm_random_graph(n, 3 * n - 7)
+        G = Graph(G)
+        if G.is_percolating():
+            nx.write_edgelist(G.graph, "Counter example!!!")
+            raise "Found a percolating graph"
+
+        nonedges = list(nx.complement(G.graph).edges)
+        edge_to_add = nonedges[np.random.choice(len(nonedges))]
+        H = G.graph
+        H.add_edge(*edge_to_add)
+        G = Graph(H)
+        if G.is_percolating():
+            folder = f"percolating graphs/n_{n}"
+            os.makedirs(folder, exist_ok=True)
+            nx.write_edgelist(G.graph, f"percolating graphs/n_{n}/percolating_{i}.edgelist", data=False)
+            print('Found a percolating graph')
+
+
 class Graph:
     def __init__(self, graph, build_helper=True, build_local_addition=False):
         self.graph = graph.copy() if graph is not None else None
@@ -211,15 +232,16 @@ class Graph:
                 self.local_addition_matrix = None
 
 
-    def restore_graph(self):
+    def restore_graph(self, using_slow=False):
         # Restore the graph object and rebuild helper structures.
         # Copy the original graph back to avoid mutating the stored original.
         self.graph = self.original_graph.copy()
-        # Rebuild helper matrix and index map from the restored graph
-        self.helper_matrix = self.build_helper_matrix()
+        if using_slow:
+            # Rebuild helper matrix and index map from the restored graph
+            self.helper_matrix = self.build_helper_matrix()
 
-        # Rebuild the marked vertices array
-        self.build_marked_vertices()
+            # Rebuild the marked vertices array
+            self.build_marked_vertices()
 
 
     def build_marked_vertices(self):
@@ -589,5 +611,6 @@ class Graph:
 
 
 if __name__ == "__main__":
-    pass
+    n = 25
+    check_3n6_conjecture(n, num_tries=100000)
 
