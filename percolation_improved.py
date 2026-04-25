@@ -5,14 +5,19 @@ from Graphs import PercolationGraph
 from networkx.algorithms import isomorphism as iso
 import os
 from networkx.algorithms import isomorphism
-import time
-import statistics
 import random
+from networkx.readwrite import json_graph
+import json
 
+from typing import Union
 
-def is_subgraph_isomorphic(G, H):
-    GM = isomorphism.GraphMatcher(G, H)
-    return GM.subgraph_is_isomorphic()
+ReturnTypePercolation = Union[
+    bool,
+    tuple[bool, nx.Graph],
+    tuple[bool, list[tuple[int, int]], list[tuple[int, int, int, int, int, int]]],
+    tuple[bool, nx.Graph, list[tuple[int, int]], list[tuple[int, int, int, int, int, int]]],
+]
+
 
 def get_subgraph_mapping(G, H):
     GM = isomorphism.GraphMatcher(G, H)
@@ -33,6 +38,18 @@ def get_k222_subgraph_mapping(G):
 
 
     return None, missing_edge
+
+def save_graph_to_json(graph, path='graph'):
+    data = json_graph.node_link_data(graph)
+    with open(f"{path}.json", "w") as f:
+        json.dump(data, f)
+
+
+def read_graph_from_json(path):
+    with open(path) as f:
+        data = json.load(f)
+
+    return json_graph.node_link_graph(data)
 
 
 
@@ -400,7 +417,7 @@ class Graph:
     def is_percolating(self,
                       print_steps=False,
                       return_final_graph=False,
-                      document_steps=False):
+                      document_steps=False) -> ReturnTypePercolation:
         """
         Faster k222 percolation check using repeated subgraph matching to K222 minus one edge.
 

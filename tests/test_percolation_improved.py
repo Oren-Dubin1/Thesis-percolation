@@ -1,11 +1,73 @@
-# test percolation_improved using unittest
+import tempfile
 import unittest
-import networkx as nx
-import numpy as np
-
-from percolation_improved import Graph
+from percolation_improved import *
 
 class TestPercolationImproved(unittest.TestCase):
+
+    def test_save_and_read_graph(self):
+        G = nx.Graph()
+        G.add_node(0, type="original")
+        G.add_node(1, type="A")
+        G.add_edge(0, 1)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "test_graph")
+
+            save_graph_to_json(G, path)
+            loaded = read_graph_from_json(f"{path}.json")
+
+            self.assertTrue(nx.is_isomorphic(G, loaded))
+            self.assertEqual(loaded.nodes[0]["type"], "original")
+            self.assertEqual(loaded.nodes[1]["type"], "A")
+            self.assertTrue(loaded.has_edge(0, 1))
+
+    def test_file_is_created(self):
+        G = nx.path_graph(3)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "graph_file")
+
+            save_graph_to_json(G, path)
+
+            self.assertTrue(os.path.exists(f"{path}.json"))
+
+    def test_empty_graph(self):
+        G = nx.Graph()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "empty")
+
+            save_graph_to_json(G, path)
+            loaded = read_graph_from_json(f"{path}.json")
+
+            self.assertEqual(loaded.number_of_nodes(), 0)
+            self.assertEqual(loaded.number_of_edges(), 0)
+
+    def test_graph_with_multiple_node_attributes(self):
+        G = nx.Graph()
+        G.add_node(0, type="original", color="red", value=5)
+        G.add_node(1, type="new", color="blue", value=10)
+        G.add_edge(0, 1, weight=3)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "attr_graph")
+
+            save_graph_to_json(G, path)
+            loaded = read_graph_from_json(f"{path}.json")
+
+            self.assertEqual(loaded.nodes[0]["type"], "original")
+            self.assertEqual(loaded.nodes[0]["color"], "red")
+            self.assertEqual(loaded.nodes[0]["value"], 5)
+
+            self.assertEqual(loaded.nodes[1]["type"], "new")
+            self.assertEqual(loaded.nodes[1]["color"], "blue")
+            self.assertEqual(loaded.nodes[1]["value"], 10)
+
+            self.assertEqual(loaded.edges[0, 1]["weight"], 3)
+
+    def test_read_nonexistent_file_raises(self):
+        with self.assertRaises(FileNotFoundError):
+            read_graph_from_json("does_not_exist.json")
     def test_build_helper_matrix_creates_expected_weights(self):
         # Build graph so pair {0,1} vs {2,3} has three cross edges
         G = nx.Graph()

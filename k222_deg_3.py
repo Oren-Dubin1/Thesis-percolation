@@ -1,9 +1,9 @@
-import doctest
 
 from percolation_improved import *
 
 import networkx as nx
-from itertools import combinations
+from networkx.readwrite import json_graph
+import json
 
 
 class K222WithDegree3Vertices:
@@ -70,7 +70,7 @@ class K222WithDegree3Vertices:
         return new_v
 
 
-    def add_vertices_by_rule(self, n_new, rule, seed=None, with_random=False):
+    def add_vertices_by_rule(self, n_new, rule, seed=None, with_random=True):
         """
         Add n_new vertices according to a simple preset rule.
 
@@ -137,16 +137,30 @@ def check_percolation(number_of_vertices_all_rules):
     builder.add_vertices_by_all_rules(number_of_vertices_all_rules)
     G = builder.percolation_graph()
     print(G.graph)
-    return G.is_percolating(print_steps=True, return_final_graph=True)
+    answer, final_graph = G.is_percolating(print_steps=True, return_final_graph=True)
+    assert not answer
+
+    for v, data in final_graph.nodes(data=True):
+        vertex_type = data["type"]
+        if vertex_type == "original":
+            continue  # Original K_{2,2,2} vertices can be connected to any type
+
+        if 'A' not in vertex_type and (final_graph.has_edge(v, 0) or final_graph.has_edge(v, 1)):
+            raise AssertionError(f"Vertex {v} of type {data['type']} should not be connected to A vertices in the final graph.")
+        if 'B' not in vertex_type and (final_graph.has_edge(v, 2) or final_graph.has_edge(v, 3)):
+            raise AssertionError(f"Vertex {v} of type {data['type']} should not be connected to B vertices in the final graph.")
+        if 'C' not in vertex_type and (final_graph.has_edge(v, 4) or final_graph.has_edge(v, 5)):
+            raise AssertionError(f"Vertex {v} of type {data['type']} should not be connected to C vertices in the final graph.")
+
+    print('Conjecture holds.')
+
+    data = json_graph.node_link_data(final_graph)
+    with open("graph.json", "w") as f:
+        json.dump(data, f)
 
 
 
 if __name__ == "__main__":
-    num_vertices = 1
-    guess = 12 + 18 * num_vertices + 3 * num_vertices ** 2
-    answer, G = check_percolation(num_vertices)
-    # print(answer)
-    print(guess)
-    print(G.number_of_edges())
-    nx.write_edgelist(G, "k222_deg_3.edgelist", data=False)
-    print(G.nodes[8]['type'])
+    num_vertices = 3
+    check_percolation(num_vertices)
+

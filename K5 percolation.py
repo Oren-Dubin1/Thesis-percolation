@@ -129,7 +129,7 @@ class TestPercolating:
 2 3
         """
         # Mock the file
-        with open("test_input.txt", "w") as f:
+        with open("tests/test_input.txt", "w") as f:
             f.write(mock_input)
 
         graphs = self.parse_graphs_from_file("test_input.txt")
