@@ -69,41 +69,42 @@ class K222WithDegree3Vertices:
 
         return new_v
 
-
-    def add_vertices_by_rule(self, n_new, rule, seed=None, with_random=True):
+    def add_vertices_by_rule(self, n_new, rule, with_random=True):
         """
-        Add n_new vertices according to a simple preset rule.
-
-        Returns
-        -------
-        list[int]
-            The labels of the added vertices.
+        Add n_new vertices according to a rule.
+        Each vertex samples independently if with_random=True.
         """
-        if seed is not None:
-            random.seed(seed)
 
-        if with_random:
-            random_idx = random.randint(0, 1)
+        def idx():
+            return random.randint(0, 1) if with_random else 0
 
-        else:
-            random_idx = 0
+        def get_neighbors(rule):
+            presets = {
+                "AAB": [self.parts["A"][0], self.parts["A"][1], self.parts["B"][idx()]],
+                "AAC": [self.parts["A"][0], self.parts["A"][1], self.parts["C"][idx()]],
+                "ABB": [self.parts["A"][idx()], self.parts["B"][0], self.parts["B"][1]],
+                "ACC": [self.parts["A"][idx()], self.parts["C"][0], self.parts["C"][1]],
+                "BBC": [self.parts["B"][0], self.parts["B"][1], self.parts["C"][idx()]],
+                "BCC": [self.parts["B"][idx()], self.parts["C"][0], self.parts["C"][1]],
+                "ABC": [
+                    self.parts["A"][idx()],
+                    self.parts["B"][idx()],
+                    self.parts["C"][idx()],
+                ],
+            }
 
-        presets = {
-            "AAB": [self.parts["A"][0], self.parts["A"][1], self.parts["B"][random_idx]],
-            "AAC": [self.parts["A"][0], self.parts["A"][1], self.parts["C"][random_idx]],
-            "ABB": [self.parts["A"][random_idx], self.parts["B"][0], self.parts["B"][1]],
-            "ACC": [self.parts["A"][random_idx], self.parts["C"][0], self.parts["C"][1]],
-            "BBC": [self.parts["B"][0], self.parts["B"][1], self.parts["C"][random_idx]],
-            "BCC": [self.parts["B"][random_idx], self.parts["C"][0], self.parts["C"][1]],
-        }
+            if rule not in presets:
+                raise ValueError(f"Unknown rule: {rule}")
+
+            return presets[rule]
+
         assert rule is not None
-
-        if rule not in presets:
-            raise ValueError(f"Unknown rule: {rule}")
 
         added = []
         for _ in range(n_new):
-            added.append(self.add_degree3_vertex(presets[rule], rule))
+            neighbors = get_neighbors(rule)
+            added.append(self.add_degree3_vertex(neighbors, rule))
+
         return added
 
     def add_vertices_by_rules(self, numbers_and_rules : tuple[tuple[int, str], ...]):
@@ -115,9 +116,12 @@ class K222WithDegree3Vertices:
 
         return added
 
-    def add_vertices_by_all_rules(self, vertices_to_add):
+    def add_vertices_by_all_rules(self, vertices_to_add, use_ABC=False):
         """ Adds the same amount of vertices to all rules """
         all_rules = ["AAB", "AAC", "ABB", "ACC", "BBC", "BCC"]
+        if use_ABC:
+            all_rules.append("ABC")
+
         return self.add_vertices_by_rules(tuple((vertices_to_add, rule) for rule in all_rules))
 
     def graph(self):
@@ -132,11 +136,10 @@ class K222WithDegree3Vertices:
         return Graph(self.G)
 
 
-def check_percolation(number_of_vertices_all_rules):
+def check_percolation(number_of_vertices_all_rules, use_ABC):
     builder = K222WithDegree3Vertices()
-    builder.add_vertices_by_all_rules(number_of_vertices_all_rules)
+    builder.add_vertices_by_all_rules(number_of_vertices_all_rules, use_ABC=use_ABC)
     G = builder.percolation_graph()
-    print(G.graph)
     answer, final_graph = G.is_percolating(print_steps=True, return_final_graph=True)
     assert not answer
 
@@ -156,20 +159,28 @@ def check_percolation(number_of_vertices_all_rules):
     save_graph_to_json(final_graph, f"final_graph_{number_of_vertices_all_rules}_vertices_per_rule.json")
 
 
-def check_from_computed_graph():
-    G = read_graph_from_json('final_graph_6_vertices_per_rule.json')
+def check_from_computed_graph(num_vertices):
+    G = read_graph_from_json(f'final_graph_{num_vertices}_vertices_per_rule.json')
+
     for v, data in G.nodes(data=True):
+        print(f'vertex of type {data['type']} has degree {G.degree(v)}')
         vertex_type = data["type"]
         if vertex_type == "original":
             continue
 
-        H = G.subgraph({0,1,2,3,4,5} | {v})
-        if H.degree(v) != 4:
-            raise AssertionError(f"Vertex {v} does not have degree 4 in the final graph. It has degree {H.degree(v)}.")
+def build_dependencies_graph(G : nx.Graph):
+    H = nx.Graph()
+    for v, data in G.nodes(data=True):
+        for u in G.neighbors(v):
+            neighbor_type = G.nodes[u].get("type")
+            H.add_edge(data['type'], neighbor_type)
 
+    return H
 
 if __name__ == "__main__":
-    num_vertices = 6
-    # check_percolation(num_vertices)
-    check_from_computed_graph()
+    num_vertices = 5
+    check_percolation(num_vertices, use_ABC=True)
+    check_from_computed_graph(num_vertices)
+    print(f'check: {4 * (num_vertices + 1)}')
+
 
