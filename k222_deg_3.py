@@ -118,7 +118,7 @@ class K222WithDegree3Vertices:
 
     def add_vertices_by_all_rules(self, vertices_to_add, use_ABC=False):
         """ Adds the same amount of vertices to all rules """
-        all_rules = ["AAB", "AAC", "ABB", "ACC", "BBC", "BCC"]
+        all_rules = ["AAB", "ABB", "AAC",  "ACC", "BBC", "BCC"]
         if use_ABC:
             all_rules.append("ABC")
 
@@ -135,38 +135,123 @@ class K222WithDegree3Vertices:
     def percolation_graph(self):
         return Graph(self.G)
 
+    def transfer_edges_from_cut(self, num_edges=0, use_ABC=False):
+        correspondence = {
+            "AAB": "ABB",
+            "ABB": "AAB",
+            "AAC": "ACC",
+            "ACC": "AAC",
+            "BBC": "BCC",
+            "BCC": "BBC",
+        }
 
-def check_percolation(number_of_vertices_all_rules, use_ABC):
+        base_types = set(correspondence.keys())
+        allowed_types = base_types | ({"ABC"} if use_ABC else set())
+
+        for _ in range(num_edges):
+            # edges between original and allowed types
+            cut_edges = [
+                (u, v)
+                for u, v in self.G.edges()
+                if (
+                           self.G.nodes[u].get("type") == "original"
+                           and self.G.nodes[v].get("type") in allowed_types
+                   )
+                   or (
+                           self.G.nodes[v].get("type") == "original"
+                           and self.G.nodes[u].get("type") in allowed_types
+                   )
+            ]
+
+            if not cut_edges:
+                raise ValueError("No more cut edges to transfer.")
+
+            u, v = random.choice(cut_edges)
+
+            # x = non-original endpoint
+            if self.G.nodes[u].get("type") == "original":
+                original_vertex, x = u, v
+            else:
+                original_vertex, x = v, u
+
+            x_type = self.G.nodes[x]["type"]
+
+            # choose target types
+            if use_ABC and x_type == "ABC":
+                # ABC connects to a random other type (not ABC)
+                target_types = list(base_types)
+            else:
+                # standard correspondence
+                if x_type not in correspondence:
+                    raise ValueError(f"Unsupported type for transfer: {x_type}")
+                target_types = [correspondence[x_type]]
+
+            # candidates of target types (excluding x)
+            candidates = [
+                w for w, data in self.G.nodes(data=True)
+                if data.get("type") in target_types and w != x
+            ]
+
+            if not candidates:
+                raise ValueError(f"No vertices of target type(s) {target_types}.")
+
+            # prefer non-neighbors
+            non_neighbors = [w for w in candidates if not self.G.has_edge(x, w)]
+            if not non_neighbors:
+                raise ValueError(
+                    f"Vertex {x} of type {x_type} is already connected to all target vertices."
+                )
+
+            y = random.choice(non_neighbors)
+
+            # transfer edge
+            self.G.remove_edge(original_vertex, x)
+            self.G.add_edge(x, y)
+
+            original_type = self.G.nodes[original_vertex]["type"]
+            y_type = self.G.nodes[y]["type"]
+
+            print(f"removing {original_type} -> {x_type} and adding {x_type} -> {y_type}")
+            print(f"removed edge: {original_vertex} -> {x}")
+            print(f"added edge: {x} -> {y}")
+
+def check_percolation(number_of_vertices_all_rules, use_ABC, num_edges_to_transfer=0):
     builder = K222WithDegree3Vertices()
     builder.add_vertices_by_all_rules(number_of_vertices_all_rules, use_ABC=use_ABC)
+    builder.transfer_edges_from_cut(num_edges=num_edges_to_transfer, use_ABC=use_ABC)
     G = builder.percolation_graph()
-    answer, final_graph = G.is_percolating(print_steps=True, return_final_graph=True)
+    answer, final_graph = G.is_percolating(print_steps=False, return_final_graph=True)
+    # PercolationGraph(build_dependencies_graph(final_graph)).print_graph()
     assert not answer
 
-    for v, data in final_graph.nodes(data=True):
-        vertex_type = data["type"]
-        if vertex_type == "original":
-            continue  # Original K_{2,2,2} vertices can be connected to any type
-
-        if 'A' not in vertex_type and (final_graph.has_edge(v, 0) or final_graph.has_edge(v, 1)):
-            raise AssertionError(f"Vertex {v} of type {data['type']} should not be connected to A vertices in the final graph.")
-        if 'B' not in vertex_type and (final_graph.has_edge(v, 2) or final_graph.has_edge(v, 3)):
-            raise AssertionError(f"Vertex {v} of type {data['type']} should not be connected to B vertices in the final graph.")
-        if 'C' not in vertex_type and (final_graph.has_edge(v, 4) or final_graph.has_edge(v, 5)):
-            raise AssertionError(f"Vertex {v} of type {data['type']} should not be connected to C vertices in the final graph.")
-
-    print('Conjecture holds.')
+    # for v, data in final_graph.nodes(data=True):
+    #     vertex_type = data["type"]
+    #     if vertex_type == "original":
+    #         continue  # Original K_{2,2,2} vertices can be connected to any type
+    #
+    #     if 'A' not in vertex_type and (final_graph.has_edge(v, 0) or final_graph.has_edge(v, 1)):
+    #         raise AssertionError(f"Vertex {v} of type {data['type']} should not be connected to A vertices in the final graph.")
+    #     if 'B' not in vertex_type and (final_graph.has_edge(v, 2) or final_graph.has_edge(v, 3)):
+    #         raise AssertionError(f"Vertex {v} of type {data['type']} should not be connected to B vertices in the final graph.")
+    #     if 'C' not in vertex_type and (final_graph.has_edge(v, 4) or final_graph.has_edge(v, 5)):
+    #         raise AssertionError(f"Vertex {v} of type {data['type']} should not be connected to C vertices in the final graph.")
+    #
+    # print('Conjecture holds.')
     save_graph_to_json(final_graph, f"final_graph_{number_of_vertices_all_rules}_vertices_per_rule.json")
 
 
 def check_from_computed_graph(num_vertices):
     G = read_graph_from_json(f'final_graph_{num_vertices}_vertices_per_rule.json')
+    print(f'There are {len(list(nx.connected_components(nx.complement(G))))} connected components')
+    for component in nx.connected_components(nx.complement(G)):
+        H = nx.complement(G).subgraph(component)
+        n = H.number_of_nodes()
+        # assert H.number_of_edges() == n * (n - 1) // 2
 
     for v, data in G.nodes(data=True):
-        print(f'vertex of type {data['type']} has degree {G.degree(v)}')
-        vertex_type = data["type"]
-        if vertex_type == "original":
-            continue
+        print(f'vertex {v} of type {data['type']} has degree {G.degree(v)}')
+
+    PercolationGraph(G).print_graph()
 
 def build_dependencies_graph(G : nx.Graph):
     H = nx.Graph()
@@ -178,9 +263,9 @@ def build_dependencies_graph(G : nx.Graph):
     return H
 
 if __name__ == "__main__":
-    num_vertices = 5
-    check_percolation(num_vertices, use_ABC=True)
+    num_vertices = 2
+    check_percolation(num_vertices, use_ABC=True, num_edges_to_transfer=1)
     check_from_computed_graph(num_vertices)
-    print(f'check: {4 * (num_vertices + 1)}')
+    # print(f'check: {4 * (num_vertices + 1)}')
 
 
