@@ -25,19 +25,23 @@ def get_subgraph_mapping(G, H):
     return None if mapping is None else dict(map(reversed, mapping.items()))
 
 def get_k222_subgraph_mapping(G):
-    k222minus = nx.complete_multipartite_graph(2,2,2)
-    missing_edge = (0,2)
-    k222minus.remove_edge(*missing_edge)
-    edges_to_add = [None, (0,1), (2,3), (4,5)]
-    for e in edges_to_add:
-        if e is not None:
-            k222minus.add_edge(*e)
-        mapping = get_subgraph_mapping(G, k222minus)
-        if mapping is not None:
-            return mapping, missing_edge
+    base = nx.complete_multipartite_graph(2, 2, 2)
+    missing_edge = (0, 2)
+    base.remove_edge(*missing_edge)
 
+    intra_edges = [(0, 1), (2, 3), (4, 5)]
 
-    return None, missing_edge
+    # iterate over all subsets of intra edges
+    for r in range(4):  # 0..3 edges
+        for subset in itertools.combinations(intra_edges, r):
+            H = base.copy()
+            H.add_edges_from(subset)
+
+            mapping = get_subgraph_mapping(G, H)
+            if mapping is not None:
+                return mapping, missing_edge
+
+    return None, None
 
 def save_graph_to_json(graph, path='graph.json'):
     data = json_graph.node_link_data(graph)
@@ -448,10 +452,6 @@ class Graph:
                 break
 
             u, v = mapping[missing_edge[0]], mapping[missing_edge[1]]
-            if self.graph.has_edge(u, v):
-                # Should be rare, but skip safely if mapping gives an already-present edge.
-                continue
-
             self.graph.add_edge(u, v)
 
             if print_steps:
@@ -462,7 +462,8 @@ class Graph:
                 # Store the matched 6-tuple (pattern node -> graph node) as witness.
                 witnesses.append(tuple(mapping[i] for i in range(6)))
 
-        percolated = self.graph.number_of_edges() == self.n * (self.n - 1) // 2
+        percolated = self.graph.number_of_edges() == \
+                     self.graph.number_of_nodes() * (self.graph.number_of_nodes() - 1) // 2
 
         if return_final_graph:
             final_graph = self.graph.copy()

@@ -150,6 +150,11 @@ class TestPercolationImproved(unittest.TestCase):
         answer = PG.is_percolating()
         self.assertTrue(answer)
 
+        G = nx.complete_graph(10)
+        G.add_edges_from([(11, 0), (11, 1), (11, 2)])
+        PG = Graph(G)
+        self.assertTrue(PG.is_percolating())
+
     def test_is_rigid(self):
         G = Graph(nx.complete_graph(5))
         self.assertTrue(G.is_rigid())
