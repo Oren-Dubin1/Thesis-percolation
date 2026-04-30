@@ -29,17 +29,17 @@ def get_k222_subgraph_mapping(G):
     missing_edge = (0, 2)
     base.remove_edge(*missing_edge)
 
-    intra_edges = [(0, 1), (2, 3), (4, 5)]
+    subsets_to_check = [None, [(2, 3)] ,[(4, 5)], [(2,3), (4,5)], [(2,3), (0, 1)], [(0,1), (2,3), (4,5)]]
 
     # iterate over all subsets of intra edges
-    for r in range(4):  # 0..3 edges
-        for subset in itertools.combinations(intra_edges, r):
-            H = base.copy()
+    for subset in subsets_to_check:
+        H = base.copy()
+        if subset is not None:
             H.add_edges_from(subset)
 
-            mapping = get_subgraph_mapping(G, H)
-            if mapping is not None:
-                return mapping, missing_edge
+        mapping = get_subgraph_mapping(G, H)
+        if mapping is not None:
+            return mapping, missing_edge
 
     return None, None
 
