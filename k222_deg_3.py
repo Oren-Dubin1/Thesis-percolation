@@ -135,7 +135,10 @@ class K222WithDegree3Vertices:
     def percolation_graph(self):
         return Graph(self.G)
 
-    def transfer_edges_from_cut(self, num_edges=0, use_ABC=False):
+    def transfer_edges_from_cut(self, num_edges=0, use_ABC=False, force_ABC_connect_to_ABC=False):
+        if force_ABC_connect_to_ABC and not use_ABC:
+            raise ValueError("force_ABC_connect_to_ABC requires use_ABC=True")
+
         correspondence = {
             "AAB": "ABB",
             "ABB": "AAB",
@@ -149,7 +152,6 @@ class K222WithDegree3Vertices:
         allowed_types = base_types | ({"ABC"} if use_ABC else set())
 
         for _ in range(num_edges):
-            # edges between original and allowed types
             cut_edges = [
                 (u, v)
                 for u, v in self.G.edges()
@@ -168,7 +170,6 @@ class K222WithDegree3Vertices:
 
             u, v = random.choice(cut_edges)
 
-            # x = non-original endpoint
             if self.G.nodes[u].get("type") == "original":
                 original_vertex, x = u, v
             else:
@@ -176,35 +177,36 @@ class K222WithDegree3Vertices:
 
             x_type = self.G.nodes[x]["type"]
 
-            # choose target types
             if use_ABC and x_type == "ABC":
-                # ABC connects to a random other type (not ABC)
-                target_types = list(base_types)
+                if force_ABC_connect_to_ABC:
+                    target_type = "ABC"
+                else:
+                    target_type = random.choice(list(base_types | {"ABC"}))
             else:
-                # standard correspondence
                 if x_type not in correspondence:
                     raise ValueError(f"Unsupported type for transfer: {x_type}")
-                target_types = [correspondence[x_type]]
 
-            # candidates of target types (excluding x)
+                # Equal chance: itself or corresponding type
+                target_type = random.choice([x_type, correspondence[x_type], 'ABC'])
+
             candidates = [
                 w for w, data in self.G.nodes(data=True)
-                if data.get("type") in target_types and w != x
+                if data.get("type") == target_type and w != x
             ]
 
             if not candidates:
-                raise ValueError(f"No vertices of target type(s) {target_types}.")
+                raise ValueError(f"No vertices of target type {target_type}.")
 
-            # prefer non-neighbors
             non_neighbors = [w for w in candidates if not self.G.has_edge(x, w)]
+
             if not non_neighbors:
                 raise ValueError(
-                    f"Vertex {x} of type {x_type} is already connected to all target vertices."
+                    f"Vertex {x} of type {x_type} is already connected to all vertices "
+                    f"of target type {target_type}."
                 )
 
             y = random.choice(non_neighbors)
 
-            # transfer edge
             self.G.remove_edge(original_vertex, x)
             self.G.add_edge(x, y)
 
@@ -218,11 +220,24 @@ class K222WithDegree3Vertices:
 def check_percolation(number_of_vertices_all_rules, use_ABC, num_edges_to_transfer=0):
     builder = K222WithDegree3Vertices()
     builder.add_vertices_by_all_rules(number_of_vertices_all_rules, use_ABC=use_ABC)
-    builder.transfer_edges_from_cut(num_edges=num_edges_to_transfer, use_ABC=use_ABC)
+    builder.transfer_edges_from_cut(num_edges=num_edges_to_transfer, use_ABC=use_ABC, force_ABC_connect_to_ABC=False)
+
     G = builder.percolation_graph()
+    answer, graph = G.is_percolating(return_final_graph=True)
+    for v, data in graph.nodes(data=True):
+        print(f'vertex {v} of type {data['type']} has degree {graph.degree(v)}.')
+    print(answer)
+
+    print(f'Is subgraph of ultra graph? {check_graph_is_subgraph_of_ultra_graph(builder.graph(), s= 2 * number_of_vertices_all_rules + 2, seed=42)}')
+
+
+    G = builder.percolation_graph()
+
     answer, final_graph = G.is_percolating(print_steps=False, return_final_graph=True)
     # PercolationGraph(build_dependencies_graph(final_graph)).print_graph()
-    assert not answer
+    if answer:
+        nx.write_edgelist(final_graph, 'Counter example!!!')
+        raise AssertionError("Final graph is percolating, but it should not be.")
 
     # for v, data in final_graph.nodes(data=True):
     #     vertex_type = data["type"]
@@ -251,7 +266,7 @@ def check_from_computed_graph(num_vertices):
     for v, data in G.nodes(data=True):
         print(f'vertex {v} of type {data['type']} has degree {G.degree(v)}')
 
-    PercolationGraph(G).print_graph()
+    # PercolationGraph(G).print_graph()
 
 def build_dependencies_graph(G : nx.Graph):
     H = nx.Graph()
@@ -262,10 +277,173 @@ def build_dependencies_graph(G : nx.Graph):
 
     return H
 
+
+import networkx as nx
+import itertools
+
+
+def build_ultra_graph(s: int, special_per_type: int = 0) -> nx.Graph:
+    # K_{s,s,s}
+    G = nx.complete_multipartite_graph(s, s, s)
+
+    AB = list(range(0, s))
+    BC = list(range(s, 2 * s))
+    AC = list(range(2 * s, 3 * s))
+
+    parts = {
+        "AB": AB,
+        "BC": BC,
+        "AC": AC,
+    }
+
+    nx.set_node_attributes(G, {v: "AB" for v in AB}, "type")
+    nx.set_node_attributes(G, {v: "BC" for v in BC}, "type")
+    nx.set_node_attributes(G, {v: "AC" for v in AC}, "type")
+
+
+    # Independent set ABC
+    ABC = list(range(3 * s, 4 * s))
+    G.add_nodes_from(ABC)
+    nx.set_node_attributes(G, {v: "ABC" for v in ABC}, "type")
+
+    nx.set_node_attributes(G, {v: i for i, v in enumerate(AB)}, "index")
+    nx.set_node_attributes(G, {v: i for i, v in enumerate(BC)}, "index")
+    nx.set_node_attributes(G, {v: i for i, v in enumerate(AC)}, "index")
+    nx.set_node_attributes(G, {v: i for i, v in enumerate(ABC)}, "index")
+
+    # Connections ABC -> one in each part
+    G.add_edges_from(zip(ABC, AB))
+    G.add_edges_from(zip(ABC, BC))
+    G.add_edges_from(zip(ABC, AC))
+
+    parts["ABC"] = ABC
+
+    # Special vertices:
+    # each has degree 3, one edge to ABC and one edge to two of A,B,C.
+    next_node = 4 * s
+
+    for X, Y in itertools.combinations(["AB", "BC", "AC"], 2):
+        special_type = f"ABC-{X}-{Y}"
+
+        for i in range(special_per_type):
+            v = next_node
+            next_node += 1
+
+            G.add_node(v, type=special_type, index=i % s)
+
+            G.add_edge(v, ABC[i % s])
+            G.add_edge(v, parts[X][i % s])
+            G.add_edge(v, parts[Y][i % s])
+
+    return G
+
+def build_ultra_graph_randomized(
+    s: int,
+    special_per_type: int = 0,
+    seed=None,
+) -> nx.Graph:
+    rng = random.Random(seed)
+
+    # Base K_{s,s,s}
+    G = nx.complete_multipartite_graph(s, s, s)
+
+    AB = list(range(0, s))
+    BC = list(range(s, 2 * s))
+    AC = list(range(2 * s, 3 * s))
+
+    parts = {
+        "AB": AB,
+        "BC": BC,
+        "AC": AC,
+    }
+
+    nx.set_node_attributes(G, {v: "AB" for v in AB}, "type")
+    nx.set_node_attributes(G, {v: "BC" for v in BC}, "type")
+    nx.set_node_attributes(G, {v: "AC" for v in AC}, "type")
+
+    # Independent set ABC
+    ABC = list(range(3 * s, 4 * s))
+    G.add_nodes_from(ABC)
+    nx.set_node_attributes(G, {v: "ABC" for v in ABC}, "type")
+
+    # Random ABC connections:
+    # each ABC vertex connects to one vertex from AB, one from BC, one from AC
+    for v in ABC:
+        for part_name in ["AB", "BC", "AC"]:
+            u = rng.choice(parts[part_name])
+            G.add_edge(v, u)
+
+    parts["ABC"] = ABC
+
+    # Special vertices:
+    # each connects to:
+    # - one random ABC vertex
+    # - one random vertex from each of two chosen base parts
+    next_node = 4 * s
+
+    for X, Y in itertools.combinations(["AB", "BC", "AC"], 2):
+        special_type = f"ABC-{X}-{Y}"
+
+        for _ in range(special_per_type):
+            v = next_node
+            next_node += 1
+
+            G.add_node(v, type=special_type)
+
+            abc_neighbor = rng.choice(ABC)
+            x_neighbor = rng.choice(parts[X])
+            y_neighbor = rng.choice(parts[Y])
+
+            G.add_edge(v, abc_neighbor)
+            G.add_edge(v, x_neighbor)
+            G.add_edge(v, y_neighbor)
+
+    return G
+
+
+def check_graph_is_subgraph_of_ultra_graph(G: nx.Graph, s: int, seed=None) -> bool:
+    U = build_ultra_graph(s)
+
+    if G.number_of_nodes() > U.number_of_nodes():
+        return False
+    if G.number_of_edges() > U.number_of_edges():
+        return False
+
+    GM = isomorphism.GraphMatcher(U, G)
+    return GM.subgraph_is_monomorphic()
+
+
 if __name__ == "__main__":
-    num_vertices = 2
-    check_percolation(num_vertices, use_ABC=True, num_edges_to_transfer=1)
-    check_from_computed_graph(num_vertices)
-    # print(f'check: {4 * (num_vertices + 1)}')
+    for s in range(2, 8):
+        for special_per_type in range(0, 5):
+            vals = []
+            all_special_degrees = []
+
+            for seed in range(100):
+                U = build_ultra_graph_randomized(
+                    s=s,
+                    special_per_type=special_per_type,
+                    seed=seed,
+                )
+
+                answer, F = Graph(U).is_percolating(return_final_graph=True)
+                vals.append((answer, F.number_of_edges()))
+
+                special_degrees = [
+                    F.degree(v)
+                    for v, data in F.nodes(data=True)
+                    if data["type"].startswith("ABC-")
+                ]
+                all_special_degrees.extend(special_degrees)
+
+            print(
+                "s=", s,
+                "special_per_type=", special_per_type,
+                "percolated=", sum(a for a, _ in vals),
+                "min_edges=", min(e for _, e in vals),
+                "max_edges=", max(e for _, e in vals),
+                "max_special_degree=", max(all_special_degrees, default=0),
+                "special_degrees=", sorted(set(all_special_degrees)),
+            )
 
 
