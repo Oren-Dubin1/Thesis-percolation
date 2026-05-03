@@ -18,6 +18,18 @@ ReturnTypePercolation = Union[
     tuple[bool, nx.Graph, list[tuple[int, int]], list[tuple[int, int, int, int, int, int]]],
 ]
 
+def iter_graphs_for_n(n: int, base_dir="percolating graphs"):
+    folder = os.path.join(base_dir, f"n_{n}")
+
+    if not os.path.isdir(folder):
+        raise ValueError(f"No folder for n={n} at {folder}")
+
+    for filename in sorted(os.listdir(folder)):
+        if filename.endswith(".edgelist"):
+            path = os.path.join(folder, filename)
+            G = nx.read_edgelist(path, nodetype=int)
+            yield G
+
 
 def get_subgraph_mapping(G, H):
     GM = isomorphism.GraphMatcher(G, H)
@@ -29,7 +41,7 @@ def get_k222_subgraph_mapping(G):
     missing_edge = (0, 2)
     base.remove_edge(*missing_edge)
 
-    subsets_to_check = [None, [(2, 3)] ,[(4, 5)], [(2,3), (4,5)], [(2,3), (0, 1)], [(0,1), (2,3), (4,5)]]
+    subsets_to_check = [[(2, 3)] ,[(4, 5)], [(2,3), (4,5)], [(2,3), (0, 1)], [(0,1), (2,3), (4,5)]]
 
     # iterate over all subsets of intra edges
     for subset in subsets_to_check:
