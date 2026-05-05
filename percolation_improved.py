@@ -207,28 +207,6 @@ def run_percolation_experiments(n=None,
     return results
 
 
-def check_3n6_conjecture(n, num_tries=1000):
-    for i in range(num_tries):
-        if i % 10 == 0:
-            print(f'Passed {i}/{num_tries}')
-        G = nx.gnm_random_graph(n, 3 * n - 7)
-        G = Graph(G)
-        if G.is_percolating():
-            nx.write_edgelist(G.graph, "Counter example!!!")
-            raise "Found a percolating graph"
-
-        nonedges = list(nx.complement(G.graph).edges)
-        edge_to_add = nonedges[np.random.choice(len(nonedges))]
-        H = G.graph
-        H.add_edge(*edge_to_add)
-        G = Graph(H)
-        if G.is_percolating():
-            folder = f"percolating graphs/n_{n}"
-            os.makedirs(folder, exist_ok=True)
-            nx.write_edgelist(G.graph, f"percolating graphs/n_{n}/percolating_{i}.edgelist", data=False)
-            print('Found a percolating graph')
-
-
 class Graph:
     def __init__(self, graph, build_helper=True, build_local_addition=False):
         self.graph = graph.copy() if graph is not None else None
@@ -642,6 +620,6 @@ class Graph:
 
 
 if __name__ == "__main__":
-    n = 22
-    check_3n6_conjecture(n, num_tries=10000)
+    pass
+
 
