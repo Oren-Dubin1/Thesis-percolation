@@ -642,8 +642,6 @@ class Graph:
 
 
 if __name__ == "__main__":
-    n = 70
-    G = nx.gnm_random_graph(n, 3 * n - 6)
-    G = Graph(G)
-    print(G.is_percolating())
+    n = 22
+    check_3n6_conjecture(n, num_tries=10000)
 
