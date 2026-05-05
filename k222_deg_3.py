@@ -228,8 +228,6 @@ def check_percolation(number_of_vertices_all_rules, use_ABC, num_edges_to_transf
         print(f'vertex {v} of type {data['type']} has degree {graph.degree(v)}.')
     print(answer)
 
-    print(f'Is subgraph of ultra graph? {check_graph_is_subgraph_of_ultra_graph(builder.graph(), s= 2 * number_of_vertices_all_rules + 2, seed=42)}')
-
 
     G = builder.percolation_graph()
 
@@ -239,30 +237,18 @@ def check_percolation(number_of_vertices_all_rules, use_ABC, num_edges_to_transf
         nx.write_edgelist(final_graph, 'Counter example!!!')
         raise AssertionError("Final graph is percolating, but it should not be.")
 
-    # for v, data in final_graph.nodes(data=True):
-    #     vertex_type = data["type"]
-    #     if vertex_type == "original":
-    #         continue  # Original K_{2,2,2} vertices can be connected to any type
-    #
-    #     if 'A' not in vertex_type and (final_graph.has_edge(v, 0) or final_graph.has_edge(v, 1)):
-    #         raise AssertionError(f"Vertex {v} of type {data['type']} should not be connected to A vertices in the final graph.")
-    #     if 'B' not in vertex_type and (final_graph.has_edge(v, 2) or final_graph.has_edge(v, 3)):
-    #         raise AssertionError(f"Vertex {v} of type {data['type']} should not be connected to B vertices in the final graph.")
-    #     if 'C' not in vertex_type and (final_graph.has_edge(v, 4) or final_graph.has_edge(v, 5)):
-    #         raise AssertionError(f"Vertex {v} of type {data['type']} should not be connected to C vertices in the final graph.")
-    #
-    # print('Conjecture holds.')
+
     save_graph_to_json(final_graph, f"final_graph_{number_of_vertices_all_rules}_vertices_per_rule.json")
 
 
 def check_from_computed_graph(num_vertices):
     G = read_graph_from_json(f'final_graph_{num_vertices}_vertices_per_rule.json')
-    print(f'There are {len(list(nx.connected_components(nx.complement(G))))} connected components')
-    for component in nx.connected_components(nx.complement(G)):
-        H = nx.complement(G).subgraph(component)
-        n = H.number_of_nodes()
-        # assert H.number_of_edges() == n * (n - 1) // 2
+    to_remove = []
+    for v in G.nodes():
+        if G.degree(v) <= 4:
+            to_remove.append(v)
 
+    G.remove_nodes_from(to_remove)
     for v, data in G.nodes(data=True):
         print(f'vertex {v} of type {data['type']} has degree {G.degree(v)}')
 
@@ -277,9 +263,6 @@ def build_dependencies_graph(G : nx.Graph):
 
     return H
 
-
-import networkx as nx
-import itertools
 
 
 def build_ultra_graph(s: int, special_per_type: int = 0) -> nx.Graph:
@@ -401,7 +384,7 @@ def build_ultra_graph_randomized(
     return G
 
 
-def check_graph_is_subgraph_of_ultra_graph(G: nx.Graph, s: int, seed=None) -> bool:
+def check_graph_is_subgraph_of_ultra_graph(G: nx.Graph, s: int) -> bool:
     U = build_ultra_graph(s)
 
     if G.number_of_nodes() > U.number_of_nodes():
@@ -414,36 +397,40 @@ def check_graph_is_subgraph_of_ultra_graph(G: nx.Graph, s: int, seed=None) -> bo
 
 
 if __name__ == "__main__":
-    for s in range(2, 8):
-        for special_per_type in range(0, 5):
-            vals = []
-            all_special_degrees = []
-
-            for seed in range(100):
-                U = build_ultra_graph_randomized(
-                    s=s,
-                    special_per_type=special_per_type,
-                    seed=seed,
-                )
-
-                answer, F = Graph(U).is_percolating(return_final_graph=True)
-                vals.append((answer, F.number_of_edges()))
-
-                special_degrees = [
-                    F.degree(v)
-                    for v, data in F.nodes(data=True)
-                    if data["type"].startswith("ABC-")
-                ]
-                all_special_degrees.extend(special_degrees)
-
-            print(
-                "s=", s,
-                "special_per_type=", special_per_type,
-                "percolated=", sum(a for a, _ in vals),
-                "min_edges=", min(e for _, e in vals),
-                "max_edges=", max(e for _, e in vals),
-                "max_special_degree=", max(all_special_degrees, default=0),
-                "special_degrees=", sorted(set(all_special_degrees)),
-            )
+    number_vertices = 3
+    check_percolation(number_vertices, use_ABC=True, num_edges_to_transfer=1)
+    check_from_computed_graph(number_vertices)
 
 
+
+# removing original -> ABB and adding ABB -> ABC
+# removed edge: 1 -> 10
+# added edge: 10 -> 26
+# vertex 0 of type original has degree 17.
+# vertex 1 of type original has degree 16.
+# vertex 2 of type original has degree 18.
+# vertex 3 of type original has degree 17.
+# vertex 4 of type original has degree 18.
+# vertex 5 of type original has degree 17.
+# vertex 6 of type AAB has degree 16.
+# vertex 7 of type AAB has degree 16.
+# vertex 8 of type AAB has degree 16.
+# vertex 9 of type ABB has degree 16.
+# vertex 10 of type ABB has degree 3.
+# vertex 11 of type ABB has degree 16.
+# vertex 12 of type AAC has degree 15.
+# vertex 13 of type AAC has degree 15.
+# vertex 14 of type AAC has degree 15.
+# vertex 15 of type ACC has degree 15.
+# vertex 16 of type ACC has degree 15.
+# vertex 17 of type ACC has degree 15.
+# vertex 18 of type BBC has degree 15.
+# vertex 19 of type BBC has degree 15.
+# vertex 20 of type BBC has degree 15.
+# vertex 21 of type BCC has degree 15.
+# vertex 22 of type BCC has degree 15.
+# vertex 23 of type BCC has degree 15.
+# vertex 24 of type ABC has degree 3.
+# vertex 25 of type ABC has degree 3.
+# vertex 26 of type ABC has degree 4.
+# False

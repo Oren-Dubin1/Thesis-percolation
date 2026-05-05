@@ -312,23 +312,34 @@ class TestPercolationImproved(unittest.TestCase):
         answer = graph_obj.is_percolating_one_step(k_222_plus=True)
         self.assertIsNone(answer)
 
-
     def test_is_percolating_witness(self):
-        G = nx.complete_multipartite_graph(2,2,2)
-        G.remove_edge(0,3)
-        graph_obj = Graph(graph=G)
-        percolates, order_of_additions, witness = graph_obj.is_percolating(document_steps=True)
-        self.assertEqual(order_of_additions, [(0,3)])
-        self.assertFalse(percolates)
-        self.assertEqual(sorted(witness[0]), [0,1,2,3,4,5])
+        G = nx.complete_multipartite_graph(2, 2, 2)
+        G.remove_edge(0, 3)
 
-        G.add_edge(0,1)
         graph_obj = Graph(graph=G)
-        percolates, order_of_additions, witness = graph_obj.is_percolating(document_steps=True)
+        percolates, order_of_additions, witnesses = graph_obj.is_percolating(document_steps=True)
+
+        self.assertEqual(order_of_additions, [(0, 3)])
+        self.assertFalse(percolates)
+
+        self.assertEqual(witnesses[0]["missing_edge"], (0, 3))
+        self.assertEqual(sorted(witnesses[0]["vertices"]), [0, 1, 2, 3, 4, 5])
+
+        G.add_edge(0, 1)
+
+        graph_obj = Graph(graph=G)
+        percolates, order_of_additions, witnesses = graph_obj.is_percolating(document_steps=True)
+
         self.assertTrue(percolates)
         self.assertEqual(len(order_of_additions), nx.complement(G).number_of_edges())
-        self.assertIsInstance(witness, list)
-        self.assertIn((0,1,3,2,4,5), witness)
+
+        self.assertIsInstance(witnesses, list)
+        self.assertEqual(len(witnesses), len(order_of_additions))
+
+        for added_edge, witness in zip(order_of_additions, witnesses):
+            self.assertEqual(witness["missing_edge"], added_edge)
+            self.assertIn(len(witness["vertices"]), [5, 6])
+
 
     def test_edge_percolates_in_process(self):
         G = nx.complete_multipartite_graph(2,2,2)

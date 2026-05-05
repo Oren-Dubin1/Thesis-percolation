@@ -24,24 +24,21 @@ def get_subgraph_mapping(G, H):
     mapping = next(GM.subgraph_isomorphisms_iter(), None)
     return None if mapping is None else dict(map(reversed, mapping.items()))
 
-def get_k222_subgraph_mapping(G):
-    base = nx.complete_multipartite_graph(2, 2, 2)
+def get_k222_k5_subgraph_mapping(G):
     missing_edge = (0, 2)
-    base.remove_edge(*missing_edge)
 
-    subsets_to_check = [None, [(2, 3)] ,[(4, 5)], [(2,3), (4,5)], [(2,3), (0, 1)], [(0,1), (2,3), (4,5)]]
+    k222 = nx.complete_multipartite_graph(2, 2, 2)
+    k222.remove_edge(*missing_edge)
 
-    # iterate over all subsets of intra edges
-    for subset in subsets_to_check:
-        H = base.copy()
-        if subset is not None:
-            H.add_edges_from(subset)
+    k5 = nx.complete_graph(5)
+    k5.remove_edge(*missing_edge)
 
-        mapping = get_subgraph_mapping(G, H)
+    for graph, _type in [(k5, 'K5'), (k222, 'K222')]:
+        mapping = get_subgraph_mapping(G, graph)
         if mapping is not None:
-            return mapping, missing_edge
+            return mapping, missing_edge, _type
 
-    return None, None
+    return None, None, None
 
 def save_graph_to_json(graph, path='graph.json'):
     data = json_graph.node_link_data(graph)
@@ -417,64 +414,80 @@ class Graph:
 
         return None
 
-
     def is_percolating(self,
-                      print_steps=False,
-                      return_final_graph=False,
-                      document_steps=False) -> ReturnTypePercolation:
+                       print_steps=False,
+                       return_final_graph=False,
+                       document_steps=False) -> ReturnTypePercolation:
         """
-        Faster k222 percolation check using repeated subgraph matching to K222 minus one edge.
+        Percolation check where each step may be witnessed either by:
 
-        Parameters
-        ----------
-        print_steps : bool
-            If True, print each added edge.
-        return_final_graph : bool
-            If True, return (percolated, final_graph) or
-            (percolated, final_graph, order_of_additions, witnesses) when document_steps=True.
-        document_steps : bool
-            If True, return addition order and match witnesses.
+        1. an induced K_{2,2,2}^- witness, or
+        2. a K_5^- witness.
 
-        Returns
-        -------
-        bool or tuple
-            Same return-style as is_percolating.
+        In both cases, the unique missing edge is added.
         """
-        if self.n < 6:
-            raise ValueError("Graph must have at least 6 vertices to check for k_222 percolation.")
+        if self.n < 5:
+            raise ValueError("Graph must have at least 5 vertices to check K5/K222 percolation.")
 
         order_of_additions = []
         witnesses = []
 
         while True:
-            mapping, missing_edge = get_k222_subgraph_mapping(self.graph)
+            mapping, missing_edge, witness_type = get_k222_k5_subgraph_mapping(self.graph)
+
             if mapping is None:
                 break
 
-            u, v = mapping[missing_edge[0]], mapping[missing_edge[1]]
+            u = mapping[missing_edge[0]]
+            v = mapping[missing_edge[1]]
+
+            if self.graph.has_edge(u, v):
+                raise RuntimeError(
+                    f"Witness returned existing edge ({u}, {v}). "
+                    f"Bug in get_k222_k5_subgraph_mapping."
+                )
+
             self.graph.add_edge(u, v)
 
             if print_steps:
-                print(f"Added edge ({u}, {v}) for fast percolation.")
+                print(f"Added edge ({u}, {v}) using {witness_type} witness.")
 
             if document_steps:
                 order_of_additions.append((u, v))
-                # Store the matched 6-tuple (pattern node -> graph node) as witness.
-                witnesses.append(tuple(mapping[i] for i in range(6)))
 
-        percolated = self.graph.number_of_edges() == \
-                     self.graph.number_of_nodes() * (self.graph.number_of_nodes() - 1) // 2
+                if witness_type == "K222":
+                    witnesses.append({
+                        "vertices": tuple(mapping[i] for i in range(6)),
+                        "missing_edge": (u, v),
+                    })
+                elif witness_type == "K5":
+                    witnesses.append({
+                        "vertices": tuple(mapping[i] for i in range(5)),
+                        "missing_edge": (u, v),
+                    })
+                else:
+                    witnesses.append({
+                        "mapping": dict(mapping),
+                        "missing_edge": (u, v),
+                    })
+
+        n = self.graph.number_of_nodes()
+        percolated = self.graph.number_of_edges() == n * (n - 1) // 2
 
         if return_final_graph:
             final_graph = self.graph.copy()
             self.restore_graph()
+
             if document_steps:
                 return percolated, final_graph, order_of_additions, witnesses
+
             return percolated, final_graph
 
         self.restore_graph()
+
         if document_steps:
             return percolated, order_of_additions, witnesses
+
         return percolated
 
     def is_rigid(self, return_rigidity_matrix=False, return_rank=False):
@@ -629,6 +642,8 @@ class Graph:
 
 
 if __name__ == "__main__":
-    n = 25
-    check_3n6_conjecture(n, num_tries=100000)
+    n = 70
+    G = nx.gnm_random_graph(n, 3 * n - 6)
+    G = Graph(G)
+    print(G.is_percolating())
 
