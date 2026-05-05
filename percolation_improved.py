@@ -641,6 +641,10 @@ class Graph:
 
 
 if __name__ == "__main__":
-    n = 25
-    check_3n6_conjecture(n, num_tries=100000)
+    G = nx.complete_multipartite_graph(2,2,2)
+    G.remove_edge(0, 2)
+    G.add_edges_from([(6, 0), (6,2), (6,3), (6,5)])
+    G = Graph(G)
+    print(G.is_percolating())
+    print(G.is_k5_percolating())
 
