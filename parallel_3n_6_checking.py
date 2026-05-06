@@ -2,6 +2,7 @@ import os
 import random
 import multiprocessing as mp
 import networkx as nx
+from pathlib import Path
 
 from percolation_improved import *
 
@@ -67,7 +68,7 @@ def check_3n6_conjecture_parallel(
         for done, result in enumerate(pool.imap_unordered(check_one, tasks, chunksize=chunksize), start=1):
             status, i, path = result
 
-            if done % 10 == 0:
+            if done % 100 == 0:
                 print(f"Passed {done}/{num_tries}")
 
             if status == "counterexample":
@@ -80,6 +81,28 @@ def check_3n6_conjecture_parallel(
 
     return found
 
+
+
+
+def iter_stored_graphs_for_n(n, base_folder="percolating graphs"):
+    folder = Path(base_folder) / f"n_{n}"
+
+    if not folder.exists():
+        return
+
+    for path in sorted(folder.glob("*.edgelist")):
+        G = nx.read_edgelist(path, nodetype=int)
+        yield G
+
+def check_all_rigid(n):
+    for G in iter_stored_graphs_for_n(n):
+        H = Graph(G)
+        if not H.is_rigid():
+            print(f"Graph {G.edges()} is not rigid.")
+            raise RuntimeError(f"Found a non-rigid graph for n={n}.")
+    print(f"All stored graphs for n={n} are rigid.")
+
 if __name__ == "__main__":
     n = 22
-    check_3n6_conjecture_parallel(n=22, num_tries=10000)
+    check_3n6_conjecture_parallel(n=22, num_tries=100000)
+    check_all_rigid(n)
