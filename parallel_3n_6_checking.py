@@ -83,26 +83,6 @@ def check_3n6_conjecture_parallel(
 
 
 
-
-def iter_stored_graphs_for_n(n, base_folder="percolating graphs"):
-    folder = Path(base_folder) / f"n_{n}"
-
-    if not folder.exists():
-        return
-
-    for path in sorted(folder.glob("*.edgelist")):
-        G = nx.read_edgelist(path, nodetype=int)
-        yield G
-
-def check_all_rigid(n):
-    for G in iter_stored_graphs_for_n(n):
-        H = Graph(G)
-        if not H.is_rigid():
-            print(f"Graph {G.edges()} is not rigid.")
-            raise RuntimeError(f"Found a non-rigid graph for n={n}.")
-    print(f"All stored graphs for n={n} are rigid.")
-
 if __name__ == "__main__":
-    n = 22
-    check_3n6_conjecture_parallel(n=22, num_tries=100000)
-    check_all_rigid(n)
+    n = 25
+    # check_3n6_conjecture_parallel(n, num_tries=100000)
