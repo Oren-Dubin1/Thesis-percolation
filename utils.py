@@ -1,6 +1,8 @@
+import itertools
 import os
 import random
 import multiprocessing as mp
+import numpy as np
 import networkx as nx
 from pathlib import Path
 
@@ -105,7 +107,72 @@ def count_k222_steps(graph_or_wrapper) -> tuple[int, int]:
             print(f"Witness sequence: {witnesses}")
 
         return k222_count, k222_after_k5_count
+
+
+
+def effective_resistance(G: nx.Graph, u, v) -> float:
+    """
+    Computes the effective resistance R_eff(u, v) in an unweighted graph G.
+
+    Assumes:
+        - G is connected
+        - every edge has resistance 1
+
+    Formula:
+        R_eff(u,v) = (e_u - e_v)^T L^+ (e_u - e_v)
+    where L^+ is the Moore-Penrose pseudoinverse of the Laplacian.
+    """
+    if u == v:
+        return 0.0
+
+    if not nx.is_connected(G):
+        raise ValueError("Effective resistance is finite only inside a connected component.")
+
+    nodes = list(G.nodes())
+    idx = {node: i for i, node in enumerate(nodes)}
+
+    L = nx.laplacian_matrix(G, nodelist=nodes).toarray().astype(float)
+    L_pinv = np.linalg.pinv(L)
+
+    b = np.zeros(len(nodes))
+    b[idx[u]] = 1
+    b[idx[v]] = -1
+
+    return float(b @ L_pinv @ b)
+
+def get_minimum_resistance_of_graph(G: nx.Graph) -> tuple[float, tuple[int, int]]:
+    min_res = 2
+    min_vertices = -1, -1
+    for u, v in G.edges():
+        res = effective_resistance(G, u, v)
+        if res < min_res:
+            min_res = res
+            min_vertices = u, v
+
+    return min_res, min_vertices
+
+
+
+def check_edge_with_resistance_at_least_5_12(n : int):
+    for G in iter_stored_graphs_for_n(n):
+        for e in G.edges():
+            H = G.copy()
+            H.remove_edge(*e)
+            answer, final_graph = Graph(H).is_percolating(return_final_graph=True)
+            if final_graph.number_of_edges() != H.number_of_edges():
+                continue
+
+            R_eff, edge = get_minimum_resistance_of_graph(H)
+            if R_eff < 5 / 12:
+                print(f"Graph has edge {edge} with effective resistance {R_eff:.4f} < 5/12.")
+                for u,v in H.edges():
+                    print(u, v)
+                raise RuntimeError(f"Found a graph for n={n} with an edge of effective resistance less than 5/12 = {5/12:.4f}.")
+
+
 if __name__ == '__main__':
-    n = 25
-    check_all_rigid(n)
+    G = nx.complete_graph(100)
+    # G.add_edge(100, 0)
+    # G.add_edge(100, 1)
+    print(effective_resistance(G, 99, 2))
 
