@@ -252,10 +252,33 @@ def solve_with_random_cuts_parallel(
     final_check_trials: int = 5_000_000,
     num_workers: int | None = None,
 ):
-    prob, r, reps, class_of_mask, m, full_id = build_base_problem(n)
+
+    edges = edge_list_kn(n)
+    m = len(edges)
+
+    reps = all_unlabeled_graphs_on_n_vertices(n)
+    buckets = build_iso_lookup(reps)
+
+    class_of_mask = make_class_id_cached(
+        n=n,
+        edges=edges,
+        buckets=buckets,
+    )
+
+    full_mask = (1 << m) - 1
+    full_id = class_of_mask(full_mask)
+
+    try:
+        prob, r = load_base_model(n)
+    except FileNotFoundError:
+        save_base_model(n)
+        prob, r = load_base_model(n)
+
+    print('Loaded base model successfully')
+
     class_cache = precompute_class_cache(class_of_mask=class_of_mask, m=m)
 
-    solver = pulp.PULP_CBC_CMD(msg=True)
+    solver = pulp.HiGHS(msg=True)
 
     for round_idx in range(rounds):
         print()
@@ -266,7 +289,10 @@ def solve_with_random_cuts_parallel(
         print("Status:", pulp.LpStatus[prob.status])
         print("Current objective:", pulp.value(r[full_id]))
 
-        values = {i: pulp.value(var) for i, var in r.items()}
+        values = {
+            i: pulp.value(var)
+            for i, var in r.items()
+        }
 
         added = add_random_submodularity_cuts_parallel(
             prob=prob,
@@ -308,12 +334,35 @@ def solve_with_random_cuts_parallel(
 
     return prob, r, reps
 
+def save_base_model(n: int, filename: str | None = None):
+    if filename is None:
+        filename = f"base_model_n{n}.json"
+
+    prob, r, reps, class_of_mask, m, full_id = build_base_problem(n)
+    prob.toJson(filename)
+
+    print(f"Saved base model to {filename}")
+
+
+def load_base_model(n: int, filename: str | None = None):
+    if filename is None:
+        filename = f"base_model_n{n}.json"
+
+    var_dict, prob = pulp.LpProblem.fromJson(filename)
+
+    r = {
+        int(name.split("_")[1]): var
+        for name, var in var_dict.items()
+        if name.startswith("r_")
+    }
+
+    return prob, r
+
 
 if __name__ == "__main__":
     solve_with_random_cuts_parallel(
-        n=6,
+        n=7,
         rounds=40,
-        cuts_per_round=200_000,
+        cuts_per_round=50_000,
         num_workers=8,
     )
-    
