@@ -1,4 +1,5 @@
 import itertools
+import json
 import random
 from collections import defaultdict
 from multiprocessing import Pool, cpu_count
@@ -245,6 +246,11 @@ def build_base_problem(n: int):
     return prob, r, reps, class_of_mask, m, full_id
 
 
+def save_values(n, values, filename):
+    with open(filename, "w") as f:
+        json.dump(values, f, indent=4)
+
+
 def solve_with_random_cuts_parallel(
     n: int,
     rounds: int = 20,
@@ -259,11 +265,7 @@ def solve_with_random_cuts_parallel(
     reps = all_unlabeled_graphs_on_n_vertices(n)
     buckets = build_iso_lookup(reps)
 
-    class_of_mask = make_class_id_cached(
-        n=n,
-        edges=edges,
-        buckets=buckets,
-    )
+    class_of_mask = make_class_id_cached(n=n, edges=edges, buckets=buckets)
 
     full_mask = (1 << m) - 1
     full_id = class_of_mask(full_mask)
@@ -274,63 +276,90 @@ def solve_with_random_cuts_parallel(
         save_base_model(n)
         prob, r = load_base_model(n)
 
-    print('Loaded base model successfully')
+    print("Loaded base model successfully")
 
     class_cache = precompute_class_cache(class_of_mask=class_of_mask, m=m)
 
     solver = pulp.HiGHS(msg=True)
 
-    for round_idx in range(rounds):
-        print()
-        print(f"=== Round {round_idx} ===")
+    values = {
+        i: None
+        for i in r
+    }
 
-        prob.solve(solver)
-
-        print("Status:", pulp.LpStatus[prob.status])
-        print("Current objective:", pulp.value(r[full_id]))
-
-        values = {
-            i: pulp.value(var)
-            for i, var in r.items()
-        }
-
-        added = add_random_submodularity_cuts_parallel(
-            prob=prob,
-            r=r,
-            m=m,
-            values=values,
-            class_cache=class_cache,
-            num_trials=cuts_per_round,
-            num_workers=num_workers,
-            seed=1234567 + 1000 * round_idx,
-        )
-
-        print("Added submodularity cuts:", added)
-
-        if added == 0:
+    try:
+        for round_idx in range(rounds):
             print()
-            print("No cuts found. Running final longer check...")
+            print(f"=== Round {round_idx} ===")
 
-            final_added = add_random_submodularity_cuts_parallel(
+            prob.solve(solver)
+
+            print("Status:", pulp.LpStatus[prob.status])
+            print("Current objective:", pulp.value(r[full_id]))
+
+            values = {
+                i: pulp.value(var)
+                for i, var in r.items()
+            }
+
+            save_values(n, values, f"latest_values_n{n}.json")
+
+            added = add_random_submodularity_cuts_parallel(
                 prob=prob,
                 r=r,
                 m=m,
                 values=values,
                 class_cache=class_cache,
-                num_trials=final_check_trials,
+                num_trials=cuts_per_round,
                 num_workers=num_workers,
-                seed=987654321 + 1000 * round_idx,
+                seed=1234567 + 1000 * round_idx,
             )
 
-            print("Final check added cuts:", final_added)
+            print("Added submodularity cuts:", added)
 
-            if final_added == 0:
-                print("Final check found no violated submodularity constraints.")
-                break
+            if added == 0:
+                print()
+                print("No cuts found. Running final longer check...")
+
+                final_added = add_random_submodularity_cuts_parallel(
+                    prob=prob,
+                    r=r,
+                    m=m,
+                    values=values,
+                    class_cache=class_cache,
+                    num_trials=final_check_trials,
+                    num_workers=num_workers,
+                    seed=987654321 + 1000 * round_idx,
+                )
+
+                print("Final check added cuts:", final_added)
+
+                if final_added == 0:
+                    print("Final check found no violated submodularity constraints.")
+                    break
+
+    except KeyboardInterrupt:
+        print()
+        print("Interrupted by user. Saving latest values...")
+
+        save_values(n, values, f"interrupted_values_n{n}.json")
+        prob.writeLP(f"interrupted_model_n{n}.lp")
+
+        print(f"Saved interrupted_values_n{n}.json")
+        print(f"Saved interrupted_model_n{n}.lp")
+
+        return prob, r, reps
 
     print()
     print("Final status:", pulp.LpStatus[prob.status])
     print("Final symmetric LP value:", pulp.value(r[full_id]))
+
+    values = {
+        i: pulp.value(var)
+        for i, var in r.items()
+    }
+
+    save_values(n, values, f"final_values_n{n}.json")
 
     return prob, r, reps
 
@@ -362,7 +391,7 @@ def load_base_model(n: int, filename: str | None = None):
 if __name__ == "__main__":
     solve_with_random_cuts_parallel(
         n=7,
-        rounds=40,
+        rounds=400,
         cuts_per_round=50_000,
         num_workers=8,
     )
