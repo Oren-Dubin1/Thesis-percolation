@@ -622,6 +622,8 @@ class Graph:
 
 
 if __name__ == "__main__":
-    pass
+    base = nx.complete_multipartite_graph(2,3)
+    print(Graph(base).is_rigid(return_rank=True))
+
 
 

@@ -171,8 +171,16 @@ def check_edge_with_resistance_at_least_5_12(n : int):
 
 
 if __name__ == '__main__':
-    G = nx.complete_graph(100)
-    # G.add_edge(100, 0)
-    # G.add_edge(100, 1)
-    print(effective_resistance(G, 99, 2))
+    def cycle_square(n):
+        G = nx.cycle_graph(n)
+        return nx.power(G, 2)
 
+    G.add_edge()
+    # example
+    G = cycle_square(10)
+
+    print(G.number_of_nodes())
+    print(G.number_of_edges())  # should be 2n for n>=5
+    print(list(G.neighbors(0)))
+    for u, v in G.edges():
+        print(u, v)
