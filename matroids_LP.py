@@ -282,73 +282,56 @@ def solve_with_random_cuts_parallel(
 
     solver = pulp.HiGHS(msg=True)
 
-    values = {
-        i: None
-        for i in r
-    }
+    for round_idx in range(rounds):
+        print()
+        print(f"=== Round {round_idx} ===")
 
-    try:
-        for round_idx in range(rounds):
+        prob.solve(solver)
+
+        print("Status:", pulp.LpStatus[prob.status])
+        print("Current objective:", pulp.value(r[full_id]))
+
+        values = {
+            i: pulp.value(var)
+            for i, var in r.items()
+        }
+
+        save_values(n, values, f"latest_values_n{n}.json")
+
+        added = add_random_submodularity_cuts_parallel(
+            prob=prob,
+            r=r,
+            m=m,
+            values=values,
+            class_cache=class_cache,
+            num_trials=cuts_per_round,
+            num_workers=num_workers,
+            seed=1234567 + 1000 * round_idx,
+        )
+
+        print("Added submodularity cuts:", added)
+
+        if added == 0:
             print()
-            print(f"=== Round {round_idx} ===")
+            print("No cuts found. Running final longer check...")
 
-            prob.solve(solver)
-
-            print("Status:", pulp.LpStatus[prob.status])
-            print("Current objective:", pulp.value(r[full_id]))
-
-            values = {
-                i: pulp.value(var)
-                for i, var in r.items()
-            }
-
-            save_values(n, values, f"latest_values_n{n}.json")
-
-            added = add_random_submodularity_cuts_parallel(
+            final_added = add_random_submodularity_cuts_parallel(
                 prob=prob,
                 r=r,
                 m=m,
                 values=values,
                 class_cache=class_cache,
-                num_trials=cuts_per_round,
+                num_trials=final_check_trials,
                 num_workers=num_workers,
-                seed=1234567 + 1000 * round_idx,
+                seed=987654321 + 1000 * round_idx,
             )
 
-            print("Added submodularity cuts:", added)
+            print("Final check added cuts:", final_added)
 
-            if added == 0:
-                print()
-                print("No cuts found. Running final longer check...")
+            if final_added == 0:
+                print("Final check found no violated submodularity constraints.")
+                break
 
-                final_added = add_random_submodularity_cuts_parallel(
-                    prob=prob,
-                    r=r,
-                    m=m,
-                    values=values,
-                    class_cache=class_cache,
-                    num_trials=final_check_trials,
-                    num_workers=num_workers,
-                    seed=987654321 + 1000 * round_idx,
-                )
-
-                print("Final check added cuts:", final_added)
-
-                if final_added == 0:
-                    print("Final check found no violated submodularity constraints.")
-                    break
-
-    except KeyboardInterrupt:
-        print()
-        print("Interrupted by user. Saving latest values...")
-
-        save_values(n, values, f"interrupted_values_n{n}.json")
-        prob.writeLP(f"interrupted_model_n{n}.lp")
-
-        print(f"Saved interrupted_values_n{n}.json")
-        print(f"Saved interrupted_model_n{n}.lp")
-
-        return prob, r, reps
 
     print()
     print("Final status:", pulp.LpStatus[prob.status])
