@@ -3,10 +3,8 @@ import json
 import random
 import time
 from collections import defaultdict
-from multiprocessing import Pool, cpu_count
 from tqdm import tqdm
-
-import networkx as nx
+from percolation_improved import Graph
 import pulp
 from utils import *
 
