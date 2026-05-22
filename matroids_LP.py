@@ -209,6 +209,8 @@ def build_base_problem(n: int):
 
     print("Adding monotonicity constraints...")
     for mask in range(1 << m):
+        if mask % 10000 == 0:
+            print(f'Added {mask}/{(1 << m) * m} monotonicity constraints...')
         id_A = class_of_mask(mask)
 
         for e_idx in range(m):
@@ -253,7 +255,7 @@ def mask_to_binary(mask: int, m: int):
 
 def save_values_by_binary_graph(n, reps, class_of_mask, m, r, filename):
     values = {}
-
+    print(f"Saving ranks by binary graph to {filename}...")
     for mask in range(1 << m):
         class_id = class_of_mask(mask)
         rank = pulp.value(r[class_id])
@@ -454,4 +456,4 @@ def load_base_model(n: int, filename: str | None = None):
     return prob, r
 
 if __name__ == "__main__":
-    solve_with_all_elementary_submodularity(8)
+    solve_with_all_elementary_submodularity(6)
