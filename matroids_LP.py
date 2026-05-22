@@ -1,8 +1,10 @@
 import itertools
 import json
 import random
+import time
 from collections import defaultdict
 from multiprocessing import Pool, cpu_count
+from tqdm import tqdm
 
 import networkx as nx
 import pulp
@@ -108,9 +110,98 @@ def all_k222_masks(n: int, edge_to_index):
     return masks
 
 
-def precompute_class_cache(class_of_mask, m: int):
-    print("Precomputing class IDs for all masks...")
-    return [class_of_mask(mask) for mask in range(1 << m)]
+def class_cache_worker(args):
+    n, edges, reps, start, end, worker_id = args
+
+    print(f"Worker {worker_id}: building lookup")
+
+    buckets = build_iso_lookup(reps)
+    class_of_mask = make_class_id_cached(
+        n=n,
+        edges=edges,
+        buckets=buckets,
+    )
+
+    out = []
+
+    t0 = time.time()
+
+    for i, mask in enumerate(range(start, end)):
+        if i % 10_000 == 0 and i > 0:
+            elapsed = time.time() - t0
+            rate = i / elapsed
+
+            print(
+                f"Worker {worker_id}: "
+                f"{i}/{end-start} "
+                f"({100*i/(end-start):.1f}%) "
+                f"| {rate:.0f} masks/sec"
+            )
+
+        out.append(class_of_mask(mask))
+
+    print(
+        f"Worker {worker_id}: finished "
+        f"{end-start} masks"
+    )
+
+    return start, out
+
+
+def precompute_class_cache(
+    n: int,
+    edges,
+    reps,
+    m: int,
+    num_workers=None,
+):
+    if num_workers is None:
+        num_workers = max(1, cpu_count() - 1)
+
+    total = 1 << m
+    chunk_size = (total + num_workers - 1) // num_workers
+
+    print(f"Precomputing {total:,} masks")
+    print(f"Workers: {num_workers}")
+    print(f"Chunk size: {chunk_size:,}")
+
+    tasks = []
+
+    for worker_id in range(num_workers):
+        start = worker_id * chunk_size
+        end = min(total, start + chunk_size)
+
+        if start < end:
+            print(
+                f"Assign worker {worker_id}: "
+                f"{start:,} -> {end:,}"
+            )
+
+            tasks.append(
+                (n, edges, reps, start, end, worker_id)
+            )
+
+    class_cache = [None] * total
+
+    t0 = time.time()
+
+    with Pool(processes=num_workers) as pool:
+        for start, chunk in tqdm(
+            pool.imap_unordered(
+                class_cache_worker,
+                tasks,
+            ),
+            total=len(tasks),
+            desc="Finished workers",
+        ):
+            class_cache[start:start + len(chunk)] = chunk
+
+    print(
+        f"Finished precomputation "
+        f"in {time.time()-t0:.1f}s"
+    )
+
+    return class_cache
 
 
 def find_violated_cuts_worker(args):
@@ -207,16 +298,25 @@ def build_base_problem(n: int):
     for i, G in enumerate(reps):
         prob += r[i] <= G.number_of_edges()
 
-    print("Adding monotonicity constraints...")
-    for mask in range(1 << m):
-        if mask % 10000 == 0:
-            print(f'Added {mask}/{1 << m} monotonicity constraints...')
-        id_A = class_of_mask(mask)
+    class_cache = precompute_class_cache(
+        n=n,
+        edges=edges,
+        reps=reps,
+        m=m,
+        num_workers=8,
+    )
 
-        for e_idx in range(m):
-            if not ((mask >> e_idx) & 1):
-                id_B = class_of_mask(mask | (1 << e_idx))
-                prob += r[id_A] <= r[id_B]
+    print("Adding monotonicity constraints...")
+
+    added = add_monotonicity_constraints_parallel(
+        prob=prob,
+        r=r,
+        m=m,
+        class_cache=class_cache,
+        num_workers=8,
+    )
+
+    print("Added monotonicity constraints:", added)
 
     print("Adding K5 circuit constraint...")
 
@@ -246,25 +346,48 @@ def build_base_problem(n: int):
 
     prob += r[full_id]
 
-    return prob, r, reps, class_of_mask, m, full_id
-
+    return prob, r, reps, class_of_mask, class_cache, m, full_id
 
 def mask_to_binary(mask: int, m: int):
     return format(mask, f"0{m}b")
 
 
-def save_values_by_binary_graph(n, reps, class_of_mask, m, r, filename):
-    values = {}
-    for mask in range(1 << m):
-        class_id = class_of_mask(mask)
-        rank = pulp.value(r[class_id])
+def graph_to_mask(G, edge_to_index):
+    mask = 0
 
-        values[mask_to_binary(mask, m)] = round(rank)
+    for u, v in G.edges():
+        e = tuple(sorted((u, v)))
+        mask |= 1 << edge_to_index[e]
+
+    return mask
+
+
+def save_values_by_representatives(
+    n,
+    reps,
+    r,
+    filename,
+):
+    edges = edge_list_kn(n)
+    edge_to_index = edge_index_dict(edges)
+    m = len(edges)
+
+    values = {}
+
+    for i, G in enumerate(reps):
+        mask = graph_to_mask(G, edge_to_index)
+
+        values[
+            format(mask, f"0{m}b")
+        ] = round(pulp.value(r[i]))
 
     with open(filename, "w") as f:
         json.dump(values, f, indent=4)
 
-    print(f"Saved ranks by binary graph to {filename}")
+    print(
+        f"Saved {len(values)} representatives "
+        f"to {filename}"
+    )
 
 
 def add_all_elementary_submodularity_constraints(prob, r, m: int, class_cache):
@@ -334,6 +457,61 @@ def elementary_submodularity_worker(args):
 
     return constraints
 
+from multiprocessing import Pool, cpu_count
+
+
+def monotonicity_worker(args):
+    start_mask, end_mask, m, class_cache, worker_id = args
+    constraints = set()
+
+    for mask in range(start_mask, end_mask):
+        if (mask - start_mask) % 100_000 == 0:
+            print(f"Worker {worker_id}: {mask}/{end_mask}")
+
+        id_A = class_cache[mask]
+
+        for e_idx in range(m):
+            if not ((mask >> e_idx) & 1):
+                id_B = class_cache[mask | (1 << e_idx)]
+                constraints.add((id_A, id_B))
+
+    return constraints
+
+
+def add_monotonicity_constraints_parallel(prob, r, m, class_cache, num_workers=None):
+    if num_workers is None:
+        num_workers = max(1, cpu_count() - 1)
+
+    total = 1 << m
+    chunk_size = (total + num_workers - 1) // num_workers
+
+    tasks = []
+
+    for worker_id in range(num_workers):
+        start_mask = worker_id * chunk_size
+        end_mask = min(total, start_mask + chunk_size)
+
+        if start_mask < end_mask:
+            tasks.append((start_mask, end_mask, m, class_cache, worker_id))
+
+    print(f"Generating monotonicity constraints using {num_workers} workers...")
+
+    with Pool(processes=num_workers) as pool:
+        results = pool.map(monotonicity_worker, tasks)
+
+    constraints = set()
+
+    for worker_constraints in results:
+        constraints.update(worker_constraints)
+
+    print(f"Distinct monotonicity constraints: {len(constraints)}")
+    print("Adding monotonicity constraints to PuLP model...")
+
+    for id_A, id_B in constraints:
+        prob += r[id_A] <= r[id_B]
+
+    return len(constraints)
+
 
 def add_all_elementary_submodularity_constraints_parallel(
     prob,
@@ -382,23 +560,16 @@ def solve_with_all_elementary_submodularity(
     edges = edge_list_kn(n)
     m = len(edges)
 
-    reps = load_unlabeled_graphs_of_order(n)
-    buckets = build_iso_lookup(reps)
-
-    class_of_mask = make_class_id_cached(n=n, edges=edges, buckets=buckets)
-
-    full_mask = (1 << m) - 1
-    full_id = class_of_mask(full_mask)
-
     try:
-        prob, r = load_base_model(n)
+        prob, r, class_cache, reps = load_base_model(n)
     except FileNotFoundError:
         save_base_model(n)
-        prob, r = load_base_model(n)
+        prob, r, class_cache, reps  = load_base_model(n)
 
     print("Loaded base model successfully")
 
-    class_cache = precompute_class_cache(class_of_mask=class_of_mask, m=m)
+    full_mask = (1 << m) - 1
+    full_id = class_cache[full_mask]
 
     added = add_all_elementary_submodularity_constraints_parallel(
         prob=prob,
@@ -418,13 +589,11 @@ def solve_with_all_elementary_submodularity(
     print("Status:", pulp.LpStatus[prob.status])
     print("Final symmetric LP value:", pulp.value(r[full_id]))
 
-    save_values_by_binary_graph(
+    save_values_by_representatives(
         n=n,
         reps=reps,
-        class_of_mask=class_of_mask,
-        m=m,
         r=r,
-        filename=f"final_values_n{n}_by_binary_graph.json",
+        filename=f"final_values_n{n}_representatives.json",
     )
 
     return prob, r, reps
@@ -434,8 +603,11 @@ def save_base_model(n: int, filename: str | None = None):
         filename = f"base_model_n{n}.json"
 
     print(f"Saving base model to {filename}...")
-    prob, r, reps, class_of_mask, m, full_id = build_base_problem(n)
+
+    prob, r, reps, class_of_mask, class_cache, m, full_id = build_base_problem(n)
+
     prob.toJson(filename)
+    save_class_cache(n, class_cache)
 
     print(f"Saved base model to {filename}")
 
@@ -444,7 +616,8 @@ def load_base_model(n: int, filename: str | None = None):
     if filename is None:
         filename = f"base_model_n{n}.json"
 
-    print(f'Loading base model from {filename}...')
+    print(f"Loading base model from {filename}...")
+
     var_dict, prob = pulp.LpProblem.fromJson(filename)
 
     r = {
@@ -453,7 +626,29 @@ def load_base_model(n: int, filename: str | None = None):
         if name.startswith("r_")
     }
 
-    return prob, r
+    reps = load_unlabeled_graphs_of_order(n)
+    class_cache = load_class_cache(n)
+
+    return prob, r, class_cache, reps
+
+def class_cache_filename(n: int):
+    return f"class_cache_n{n}.json"
+
+
+def save_class_cache(n: int, class_cache):
+    filename = class_cache_filename(n)
+
+    with open(filename, "w") as f:
+        json.dump(class_cache, f)
+
+    print(f"Saved class cache to {filename}")
+
+
+def load_class_cache(n: int):
+    filename = class_cache_filename(n)
+
+    with open(filename, "r") as f:
+        return json.load(f)
 
 if __name__ == "__main__":
     solve_with_all_elementary_submodularity(8)
