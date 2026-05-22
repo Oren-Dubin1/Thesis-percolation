@@ -457,3 +457,4 @@ def load_base_model(n: int, filename: str | None = None):
 
 if __name__ == "__main__":
     solve_with_all_elementary_submodularity(6)
+    print('Done')
