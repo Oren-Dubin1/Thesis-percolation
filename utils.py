@@ -5,6 +5,8 @@ import multiprocessing as mp
 import numpy as np
 import networkx as nx
 from pathlib import Path
+import subprocess
+
 
 from percolation_improved import Graph
 
@@ -170,17 +172,68 @@ def check_edge_with_resistance_at_least_5_12(n : int):
                 raise RuntimeError(f"Found a graph for n={n} with an edge of effective resistance less than 5/12 = {5/12:.4f}.")
 
 
-if __name__ == '__main__':
-    def cycle_square(n):
-        G = nx.cycle_graph(n)
-        return nx.power(G, 2)
 
-    G.add_edge()
-    # example
-    G = cycle_square(10)
+def save_unlabeled_graphs_up_to_n(max_n=9, out_dir="unlabeled_graphs"):
+    out_dir = Path(out_dir)
+    out_dir.mkdir(exist_ok=True)
 
-    print(G.number_of_nodes())
-    print(G.number_of_edges())  # should be 2n for n>=5
-    print(list(G.neighbors(0)))
-    for u, v in G.edges():
-        print(u, v)
+    for n in range(1, max_n + 1):
+        out_path = out_dir / f"unlabeled_graphs_n{n}.g6"
+
+        print(f"Generating n={n} -> {out_path}")
+
+        result = subprocess.run(
+            ["wsl", "nauty-geng", str(n)],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+
+        lines = []
+
+        for line in result.stdout.splitlines():
+            line = line.strip()
+
+            if not line or line.startswith(">"):
+                continue
+
+            lines.append(line)
+
+        with open(out_path, "w") as f:
+            for line in lines:
+                f.write(line + "\n")
+
+        print(f"Saved {len(lines)} graphs")
+
+
+def load_unlabeled_graphs_of_order(n: int, directory="unlabeled_graphs"):
+    path = Path(directory) / f"unlabeled_graphs_n{n}.g6"
+
+    if not path.exists():
+        raise FileNotFoundError(
+            f"No file found for n={n}: {path}"
+        )
+
+    graphs = []
+
+    with open(path, "rb") as f:
+        for line in f:
+            line = line.strip()
+
+            if not line:
+                continue
+
+            G = nx.from_graph6_bytes(line)
+            G = nx.convert_node_labels_to_integers(G)
+
+            graphs.append(G)
+
+    print(f"Loaded {len(graphs)} unlabeled graphs on {n} vertices")
+
+    return graphs
+
+
+if __name__ == "__main__":
+    graphs = load_unlabeled_graphs_of_order(8)
+    print(len(graphs))
+    print(graphs[0])
