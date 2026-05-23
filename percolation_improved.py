@@ -187,14 +187,14 @@ def run_percolation_experiments(n=None,
             fname = f"percolating_{p_fname}_2.edgelist"
             path = os.path.join(output_dir, fname)
             nx.write_edgelist(graph.original_graph, path, data=False)
-            summary = (f"{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} | attempts={attempts} | "
+            summary = (f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | attempts={attempts} | "
                        f"nodes={graph.graph.number_of_nodes()} edges={graph.graph.number_of_edges()} "
                        f"| file={fname}\n")
             results.append({'attempts': attempts, 'file': path})
             count_percolated += 1
             print(f' Percolated and saved graph. Total percolated so far: {count_percolated}')
         else:
-            summary = (f"{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} | attempts={attempts} | "
+            summary = (f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | attempts={attempts} | "
                        f"FAILED to percolate within {max_tries} attempts\n")
             results.append({'attempts': attempts, 'file': None})
 
