@@ -14,5 +14,5 @@ def solve_ilp_from_json(path: str, msg: bool = True):
     return model, variables, pulp.value(model.objective)
 
 if __name__ == "__main__":
-    path = r'C:\Oren\Academy\Thesis\Thesis-percolation\full_model_n8.json'
+    path = r'C:\Oren\Academy\Thesis\Thesis-percolation\full_model_n6.json'
     solve_ilp_from_json(path)
