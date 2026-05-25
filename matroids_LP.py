@@ -1,18 +1,27 @@
-import json
 import logging
 import multiprocessing
 import time
+import warnings
 from argparse import ArgumentParser
 from collections import defaultdict, OrderedDict
-from tqdm import tqdm
+from multiprocessing import Pool
+
 import pulp
+
 from utils import *
-from multiprocessing import Pool, cpu_count
 
-
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    handlers=[
+        logging.StreamHandler()
+    ]
+)
 
 logger = logging.getLogger(__name__)
 
+warnings.filterwarnings("ignore", category=UserWarning)
 
 def edge_list_kn(n: int):
     return list(itertools.combinations(range(n), 2))
@@ -26,10 +35,12 @@ def graph_from_mask(n: int, edges, mask: int):
     G = nx.Graph()
     G.add_nodes_from(range(n))
 
-    #TODO: flip so that it iterates over 1 bits instead of edges
-    for i, (u, v) in enumerate(edges):
-        if (mask >> i) & 1:
-            G.add_edge(u, v)
+    i = 0
+    while mask != 0:
+        if mask & 1 == 1:
+            G.add_edge(*edges[i])
+        mask >>= 1
+        i += 1
 
     return G
 
@@ -85,6 +96,7 @@ class ClassCache:
     def __setitem__(self, key, value):
         self.cache[key] = value
 
+
 class K222MatroidProblem:
     def __init__(self, n: int):
         m = n * (n - 1) // 2
@@ -109,9 +121,9 @@ class K222MatroidProblem:
         total = 1 << self.m
         chunk_size = (total + workers - 1) // workers
 
-        print(f"Precomputing {total:,} masks")
-        print(f"Workers: {workers}")
-        print(f"Chunk size: {chunk_size:,}")
+        logger.info(f"Precomputing {total:,} masks")
+        logger.info(f"Workers: {workers}")
+        logger.info(f"Chunk size: {chunk_size:,}")
 
         tasks = []
 
@@ -120,9 +132,6 @@ class K222MatroidProblem:
             end = min(total, start + chunk_size)
 
             if start < end:
-                print(f"Assign worker {worker_id}: "
-                      f"{start:,} -> {end:,}")
-
                 tasks.append((worker_id, self, start, end))
 
         class_cache = [None] * total
@@ -130,20 +139,9 @@ class K222MatroidProblem:
         t0 = time.time()
 
         with Pool(processes=workers) as pool:
-            for start, chunk in tqdm(
-                    pool.imap_unordered(
-                        class_cache_worker,
-                        tasks,
-                    ),
-                    total=len(tasks),
-                    desc="Finished workers",
-            ):
-                class_cache[start:start + len(chunk)] = chunk
+            pool.map(self._elementary_submodularity_worker, tasks)
 
-        print(
-            f"Finished precomputation "
-            f"in {time.time() - t0:.1f}s"
-        )
+        logger.info(f"Finished precomputation in {time.time() - t0:.1f}s")
 
         return class_cache
 
@@ -159,7 +157,7 @@ class K222MatroidProblem:
         log_step = (end - start) // 10
         for mask in range(start, end):
             if (mask - start) % log_step == 0:
-                print(f"Worker {worker}: {mask}/{end}")
+                logger.info(f"Worker {worker}: {mask}/{end}")
 
             id_a = prob.class_cache[mask]
 
@@ -205,7 +203,7 @@ class K222MatroidProblem:
 
         for A in range(start_A, end_A):
             if (A - start_A) % 100_000 == 0:
-                print(f"Worker {worker_id}: processed A={A}/{end_A}")
+                logger.info(f"Worker {worker_id}: processed A={A}/{end_A}")
 
             class_cache = prob.class_cache
             id_A = class_cache[A]
@@ -319,6 +317,9 @@ class K222MatroidProblem:
         empty_id = self.class_cache[empty_mask]
         self.prob += self.r[empty_id] == 0
 
+        logger.info("Preprocessing class cache")
+        self.preprocess_class_cache(workers)
+
         logger.info("Adding size constraints...")
         self._add_size_constraints()
 
@@ -346,7 +347,7 @@ class K222MatroidProblem:
         pass
 
     def solve(self):
-        solver = pulp.HiGHS(msg=True)
+        solver = pulp.HiGHS(msg=False)
 
         logger.info("Solving...")
         self.prob.solve(solver)
@@ -370,7 +371,8 @@ def solve_with_all_elementary_submodularity(args):
 def parse_args():
     parser = ArgumentParser()
     parser.add_argument("--n", type=int, help="Number of vertices")
-    parser.add_argument("--workers", type=int, default=multiprocessing.cpu_count(), help="Number of multiprocess workers")
+    parser.add_argument("--workers", type=int, default=multiprocessing.cpu_count(),
+                        help="Number of multiprocess workers")
 
     return parser.parse_args()
 
