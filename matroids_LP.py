@@ -314,9 +314,6 @@ class K222MatroidProblem:
         empty_id = self.class_cache[empty_mask]
         self.prob += self.r[empty_id] == 0
 
-        logger.info("Preprocessing class cache")
-        self.preprocess_class_cache(workers)
-
         logger.info("Adding size constraints...")
         self._add_size_constraints()
 
@@ -359,6 +356,10 @@ class K222MatroidProblem:
 def solve_with_all_elementary_submodularity(args):
     prob = K222MatroidProblem(args.n)
 
+    if args.preprocess:
+        logger.info("Preprocessing class cache")
+        prob.preprocess_class_cache(args.workers)
+
     prob.build(args.workers)
     max_kn_rank = prob.solve()
     logger.info(f"Solved ILP problem on {args.n} vertices: {max_kn_rank}")
@@ -370,6 +371,7 @@ def parse_args():
     parser.add_argument("--n", type=int, help="Number of vertices")
     parser.add_argument("--workers", type=int, default=multiprocessing.cpu_count(),
                         help="Number of multiprocess workers")
+    parser.add_argument("--preprocess", action="store_true")
 
     return parser.parse_args()
 
