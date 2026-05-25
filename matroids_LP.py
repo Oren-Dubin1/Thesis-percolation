@@ -363,7 +363,7 @@ def solve_with_all_elementary_submodularity(args):
 
     prob.build(args.workers)
     max_kn_rank = prob.solve()
-    print(f"Solved ILP problem on {args.n} vertices: {max_kn_rank}")
+    logger.info(f"Solved ILP problem on {args.n} vertices: {max_kn_rank}")
     prob.save()
 
 
