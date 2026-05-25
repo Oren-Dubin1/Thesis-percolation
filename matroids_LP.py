@@ -86,16 +86,13 @@ class ClassCache:
 
     def preprocess(self, keys):
         for key in tqdm(keys):
-            self[key] = self[key]
+            self.cache[key] = self[key]
 
     def __getitem__(self, item):
         if item not in self.cache:
             self.cache[item] = self._class_id(graph_from_mask(self.n, self.kn_edges, item))
 
         return self.cache[item]
-
-    def __setitem__(self, key, value):
-        self.cache[key] = value
 
 
 class K222MatroidProblem:
@@ -150,10 +147,10 @@ class K222MatroidProblem:
         worker, prob, start, end = args
         constraints_batch = set()
 
-        log_interval = (end - start) // 100
+        log_interval = (end - start) // 1000
         for mask in range(start, end):
             if (mask - start) % log_interval == 0:
-                logger.info(f"Worker {worker}: {int((mask - start)/(end - start) * 100)}%")
+                logger.info(f"Worker {worker}: {(mask - start)/(end - start) * 100:5f}%")
 
             id_a = prob.class_cache[mask]
 
@@ -197,10 +194,10 @@ class K222MatroidProblem:
 
         constraints = set()
 
-        log_interval = (end_A - start_A) // 100
+        log_interval = (end_A - start_A) // 1000
         for A in range(start_A, end_A):
             if (A - start_A) % log_interval == 0:
-                logger.info(f"Worker {worker_id}: processed A={int((A - start_A)/(end_A - start_A) * 100)}%")
+                logger.info(f"Worker {worker_id}: processed A={(A - start_A)/(end_A - start_A) * 100:5f}%")
 
             class_cache = prob.class_cache
             id_A = class_cache[A]
