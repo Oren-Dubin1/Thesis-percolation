@@ -1,12 +1,12 @@
 import logging
 import multiprocessing
-import time
 import warnings
 from argparse import ArgumentParser
 from collections import defaultdict, OrderedDict
 from multiprocessing import Pool
 
 import pulp
+from tqdm import tqdm
 
 from utils import *
 
@@ -22,6 +22,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 warnings.filterwarnings("ignore", category=UserWarning)
+
 
 def edge_list_kn(n: int):
     return list(itertools.combinations(range(n), 2))
@@ -84,7 +85,7 @@ class ClassCache:
         raise ValueError("Graph class not found.")
 
     def preprocess(self, keys):
-        for key in keys:
+        for key in tqdm(keys):
             self[key] = self[key]
 
     def __getitem__(self, item):
@@ -132,18 +133,12 @@ class K222MatroidProblem:
             end = min(total, start + chunk_size)
 
             if start < end:
-                tasks.append((worker_id, self, start, end))
-
-        class_cache = [None] * total
-
-        t0 = time.time()
+                tasks.append(range(start, end))
 
         with Pool(processes=workers) as pool:
-            pool.map(self._elementary_submodularity_worker, tasks)
+            pool.map(self.class_cache.preprocess, tasks)
 
-        logger.info(f"Finished precomputation in {time.time() - t0:.1f}s")
-
-        return class_cache
+        logger.info(f"Finished preprocessing")
 
     def _add_size_constraints(self):
         logger.info("Adding size constraints")
@@ -154,10 +149,11 @@ class K222MatroidProblem:
     def _monotonicity_worker(args):
         worker, prob, start, end = args
         constraints_batch = set()
-        log_step = (end - start) // 10
+
+        log_interval = (end - start) // 100
         for mask in range(start, end):
-            if (mask - start) % log_step == 0:
-                logger.info(f"Worker {worker}: {mask}/{end}")
+            if (mask - start) % log_interval == 0:
+                logger.info(f"Worker {worker}: {int((mask - start)/(end - start) * 100)}%")
 
             id_a = prob.class_cache[mask]
 
@@ -201,9 +197,10 @@ class K222MatroidProblem:
 
         constraints = set()
 
+        log_interval = (end_A - start_A) // 100
         for A in range(start_A, end_A):
-            if (A - start_A) % 100_000 == 0:
-                logger.info(f"Worker {worker_id}: processed A={A}/{end_A}")
+            if (A - start_A) % log_interval == 0:
+                logger.info(f"Worker {worker_id}: processed A={int((A - start_A)/(end_A - start_A) * 100)}%")
 
             class_cache = prob.class_cache
             id_A = class_cache[A]
