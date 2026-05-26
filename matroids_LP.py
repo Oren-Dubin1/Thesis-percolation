@@ -1,4 +1,5 @@
 import logging
+import math
 import multiprocessing
 import warnings
 from argparse import ArgumentParser
@@ -138,120 +139,72 @@ class K222MatroidProblem:
         logger.info(f"Finished preprocessing")
 
     def _add_size_constraints(self):
-        logger.info("Adding size constraints")
         for i, G in enumerate(self.reps):
             self.prob += self.r[i] <= G.number_of_edges()
 
     @staticmethod
-    def _monotonicity_worker(args):
+    def _monotonicity_and_submodularity_worker(args):
         worker, prob, start, end = args
-        constraints_batch = set()
 
-        log_interval = (end - start) // 1000
-        for mask in range(start, end):
-            if (mask - start) % log_interval == 0:
-                logger.info(f"Worker {worker}: {(mask - start)/(end - start) * 100:5f}%")
+        monotonicity_constraints = set()
+        submodularity_constraints = set()
 
-            id_a = prob.class_cache[mask]
+        log_interval = (end - start) // 100
+        for g in range(start, end):
+            if (g - start) % log_interval == 0:
+                logger.info(f"{worker}: {(g - start) / (end - start):3f}%")
 
-            for e_idx in range(prob.m):
-                if not ((mask >> e_idx) & 1):
-                    id_b = prob.class_cache[mask | (1 << e_idx)]
-                    constraints_batch.add((id_a, id_b))
+            g_id = prob.class_cache[g]
+            missing_edges = [1 << e for e in range(prob.m) if not (g & (1 << e))]
+            for (i, e_mask) in enumerate(missing_edges):
+                # Monotonicity
+                ge_id = prob.class_cache[g | e_mask]
+                monotonicity_constraints.add((g_id, ge_id))
 
-        return constraints_batch
+                # Submodularity
+                for f_mask in missing_edges[i:]:
+                    gf = g | f_mask
+                    gef = gf | e_mask
 
-    def _add_monotonicity_constraints(self, workers: int):
-        total = 1 << self.m
-        chunk_size = (total + workers - 1) // workers
+                    gf_id = prob.class_cache[gf]
+                    gef_id = prob.class_cache[gef]
 
-        tasks = []
-        for worker_id in range(workers):
-            start_mask = worker_id * chunk_size
-            end_mask = min(total, start_mask + chunk_size)
+                    left_1, left_2 = sorted((ge_id, gf_id))
+                    submodularity_constraints.add((left_1, left_2, g_id, gef_id))
 
-            if start_mask < end_mask:
-                tasks.append((worker_id, self, start_mask, end_mask))
+        return monotonicity_constraints, submodularity_constraints
 
-        logger.info(f"Generating monotonicity constraints using {workers} workers...")
-        with Pool(processes=workers) as pool:
-            results = pool.map(self._monotonicity_worker, tasks)
-
-        constraints = set()
-
-        for worker_constraints in results:
-            constraints.update(worker_constraints)
-
-        logger.info(f"Distinct monotonicity constraints: {len(constraints)}")
-        logger.info("Adding monotonicity constraints to PuLP model...")
-
-        for id_A, id_B in constraints:
-            self.prob += self.r[id_A] <= self.r[id_B]
-
-    @staticmethod
-    def _elementary_submodularity_worker(args):
-        worker_id, prob, start_A, end_A = args
-
-        constraints = set()
-
-        log_interval = (end_A - start_A) // 1000
-        for A in range(start_A, end_A):
-            if (A - start_A) % log_interval == 0:
-                logger.info(f"Worker {worker_id}: processed A={(A - start_A)/(end_A - start_A) * 100:5f}%")
-
-            class_cache = prob.class_cache
-            id_A = class_cache[A]
-            missing = [e for e in range(prob.m) if not ((A >> e) & 1)]
-
-            for i in range(len(missing)):
-                e = missing[i]
-                Ae = A | (1 << e)
-                id_Ae = class_cache[Ae]
-
-                for j in range(i + 1, len(missing)):
-                    f = missing[j]
-                    Af = A | (1 << f)
-                    Aef = Ae | (1 << f)
-
-                    id_Af = class_cache[Af]
-                    id_Aef = class_cache[Aef]
-
-                    left_1, left_2 = sorted((id_Ae, id_Af))
-                    constraints.add((left_1, left_2, id_A, id_Aef))
-
-        return constraints
-
-    def _add_elementary_submodularity_constraints(self, workers: int):
-        logger.info(f"Generating elementary submodularity constraints using {workers} workers...")
+    def _add_monotonicity_and_submodularity_constraints(self, workers: int):
+        logger.info(f"Generating monotonicity and submodularity constraints using {workers} workers...")
 
         total = 1 << self.m
-        chunk_size = (total + workers - 1) // workers
+        chunk_size = int(math.ceil(total / workers))
 
         tasks = []
 
         for worker_id in range(workers):
-            start_A = worker_id * chunk_size
-            end_A = min(total, start_A + chunk_size)
+            start = worker_id * chunk_size
+            end = min(total, start + chunk_size)
 
-            if start_A < end_A:
-                tasks.append((worker_id, self, start_A, end_A))
+            if start < end:
+                tasks.append((worker_id, self, start, end))
 
         with Pool(processes=workers) as pool:
-            results = pool.map(self._elementary_submodularity_worker, tasks)
+            results = pool.map(self._monotonicity_and_submodularity_worker, tasks)
 
-        constraints = set()
-
-        for worker_constraints in results:
-            constraints.update(worker_constraints)
-
-        logger.info(f"Distinct elementary submodularity constraints: {len(constraints)}")
-        logger.info("Adding constraints to PuLP model...")
+        monotonicity_constraints = set()
+        submodularity_constraints = set()
+        for work_mono_const, work_sub_const in results:
+            monotonicity_constraints.update(work_mono_const)
+            submodularity_constraints.update(work_sub_const)
 
         r = self.r
-        for id_Ae, id_Af, id_A, id_Aef in constraints:
+        for id_A, id_B in monotonicity_constraints:
+            self.prob += r[id_A] <= r[id_B]
+
+        for id_Ae, id_Af, id_A, id_Aef in submodularity_constraints:
             self.prob += r[id_Ae] + r[id_Af] >= r[id_A] + r[id_Aef]
 
-        return len(constraints)
 
     @staticmethod
     def _complete_graph_mask_on_subset(subset, edge_to_index):
@@ -314,11 +267,14 @@ class K222MatroidProblem:
         logger.info("Adding size constraints...")
         self._add_size_constraints()
 
-        logger.info("Adding monotonicity constraints...")
-        self._add_monotonicity_constraints(workers)
+        # logger.info("Adding monotonicity constraints...")
+        # self._add_monotonicity_constraints(workers)
+        #
+        # logger.info("Adding elementary submodularity constraints...")
+        # self._add_elementary_submodularity_constraints(workers)
 
-        logger.info("Adding elementary submodularity constraints...")
-        self._add_elementary_submodularity_constraints(workers)
+        logger.info("Adding monotonicity and elementary submodularity constraints")
+        self._add_monotonicity_and_submodularity_constraints(workers)
 
         logger.info("Adding K5 circuit constraints...")
         self._add_k5_constraints()
