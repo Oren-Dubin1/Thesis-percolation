@@ -233,7 +233,3 @@ def load_unlabeled_graphs_of_order(n: int, directory="unlabeled_graphs"):
     return graphs
 
 
-if __name__ == "__main__":
-    graphs = load_unlabeled_graphs_of_order(8)
-    print(len(graphs))
-    print(graphs[0])
