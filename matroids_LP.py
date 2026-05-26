@@ -120,9 +120,9 @@ class K222MatroidProblem:
         total = 1 << self.m
         chunk_size = (total + workers - 1) // workers
 
-        logger.info(f"Precomputing {total:,} masks")
+        logger.info(f"Precomputing {total} masks")
         logger.info(f"Workers: {workers}")
-        logger.info(f"Chunk size: {chunk_size:,}")
+        logger.info(f"Chunk size: {chunk_size}")
 
         tasks = []
 
@@ -175,10 +175,11 @@ class K222MatroidProblem:
         return monotonicity_constraints, submodularity_constraints
 
     def _add_monotonicity_and_submodularity_constraints(self, workers: int):
-        logger.info(f"Generating monotonicity and submodularity constraints using {workers} workers...")
-
         total = 1 << self.m
         chunk_size = int(math.ceil(total / workers))
+
+        logger.info(f"Generating monotonicity and submodularity constraints using {workers} workers...")
+        logger.info(f"Chunk size: {chunk_size}")
 
         tasks = []
 
@@ -204,7 +205,6 @@ class K222MatroidProblem:
 
         for id_Ae, id_Af, id_A, id_Aef in submodularity_constraints:
             self.prob += r[id_Ae] + r[id_Af] >= r[id_A] + r[id_Aef]
-
 
     @staticmethod
     def _complete_graph_mask_on_subset(subset, edge_to_index):
@@ -266,12 +266,6 @@ class K222MatroidProblem:
 
         logger.info("Adding size constraints...")
         self._add_size_constraints()
-
-        # logger.info("Adding monotonicity constraints...")
-        # self._add_monotonicity_constraints(workers)
-        #
-        # logger.info("Adding elementary submodularity constraints...")
-        # self._add_elementary_submodularity_constraints(workers)
 
         logger.info("Adding monotonicity and elementary submodularity constraints")
         self._add_monotonicity_and_submodularity_constraints(workers)
