@@ -8,6 +8,7 @@ from networkx.algorithms import isomorphism
 import random
 from networkx.readwrite import json_graph
 import json
+# from utils import *
 
 from typing import Union
 
@@ -397,6 +398,9 @@ class Graph:
                        return_final_graph=False,
                        document_steps=False) -> ReturnTypePercolation:
         """
+        Possible bug in addition of K5, think it's okay
+        """
+        """
         Percolation check where each step may be witnessed either by:
 
         1. an induced K_{2,2,2}^- witness, or
@@ -619,11 +623,51 @@ class Graph:
         return percolated
 
 
+    def is_3_hyperconnected(self, return_rank=False, seed=0):
+        rng = np.random.default_rng(seed)
+
+        nodes = list(self.graph.nodes())
+        idx = {v: i for i, v in enumerate(nodes)}
+        n = len(nodes)
+
+        p = rng.normal(size=(n, 3))
+
+        M = np.zeros((self.graph.number_of_edges(), 3 * n))
+
+        for row, (u, v) in enumerate(self.graph.edges()):
+            iu, iv = idx[u], idx[v]
+
+            M[row, 3 * iu:3 * iu + 3] = p[iv]
+            M[row, 3 * iv:3 * iv + 3] = -p[iu]
+
+        rank = np.linalg.matrix_rank(M)
+        if return_rank:
+            return rank == 3 * n - 6, rank
+        return rank == 3 * n - 6
+
+
 
 
 if __name__ == "__main__":
-    base = nx.complete_multipartite_graph(2,3)
-    print(Graph(base).is_rigid(return_rank=True))
+    G = nx.Graph()
+
+    G.add_edges_from([
+        (1, 2),
+        (1, 4),
+        (1, 5),
+        (1, 6),
+        (2, 3),
+        (2, 4),
+        (2, 5),
+        (2, 6),
+        (3, 5),
+        (3, 6),
+        (4, 5),
+        (4, 6),
+    ])
+
+    print(Graph(G).is_percolating(print_steps=True))
+    print(G.degree[3])
 
 
 
