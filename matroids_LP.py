@@ -120,9 +120,9 @@ class K222MatroidProblem:
         total = 1 << self.m
         chunk_size = (total + workers - 1) // workers
 
-        logger.info(f"Precomputing {total} masks")
+        logger.info(f"Precomputing {total:,} masks")
         logger.info(f"Workers: {workers}")
-        logger.info(f"Chunk size: {chunk_size}")
+        logger.info(f"Chunk size: {chunk_size:,}")
 
         tasks = []
 
@@ -148,12 +148,7 @@ class K222MatroidProblem:
 
         monotonicity_constraints = set()
         submodularity_constraints = set()
-
-        log_interval = (end - start) // 100
         for g in range(start, end):
-            if (g - start) % log_interval == 0:
-                logger.info(f"{worker}: {(g - start) / (end - start):3f}%")
-
             g_id = prob.class_cache[g]
             missing_edges = [1 << e for e in range(prob.m) if not (g & (1 << e))]
             for (i, e_mask) in enumerate(missing_edges):
@@ -169,8 +164,7 @@ class K222MatroidProblem:
                     gf_id = prob.class_cache[gf]
                     gef_id = prob.class_cache[gef]
 
-                    left_1, left_2 = sorted((ge_id, gf_id))
-                    submodularity_constraints.add((left_1, left_2, g_id, gef_id))
+                    submodularity_constraints.add((ge_id, gf_id, g_id, gef_id))
 
         return monotonicity_constraints, submodularity_constraints
 
@@ -179,10 +173,9 @@ class K222MatroidProblem:
         chunk_size = int(math.ceil(total / workers))
 
         logger.info(f"Generating monotonicity and submodularity constraints using {workers} workers...")
-        logger.info(f"Chunk size: {chunk_size}")
+        logger.info(f"Chunk size: {chunk_size:,}")
 
         tasks = []
-
         for worker_id in range(workers):
             start = worker_id * chunk_size
             end = min(total, start + chunk_size)
