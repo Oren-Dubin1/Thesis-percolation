@@ -155,6 +155,14 @@ class TestPercolationImproved(unittest.TestCase):
         PG = Graph(G)
         self.assertTrue(PG.is_percolating())
 
+        G = nx.complete_graph([1, 2, 3, 4])
+        G.add_edges_from([
+            (5, 1), (5, 2), (5, 3),
+            (6, 1), (6, 2), (6, 3),
+        ])
+        PG = Graph(G)
+        self.assertFalse(PG.is_percolating())
+
     def test_is_rigid(self):
         G = Graph(nx.complete_graph(5))
         self.assertTrue(G.is_rigid())
@@ -322,8 +330,7 @@ class TestPercolationImproved(unittest.TestCase):
         self.assertEqual(order_of_additions, [(0, 3)])
         self.assertFalse(percolates)
 
-        self.assertEqual(witnesses[0]["missing_edge"], (0, 3))
-        self.assertEqual(sorted(witnesses[0]["vertices"]), [0, 1, 2, 3, 4, 5])
+        self.assertEqual(sorted(witnesses[0]), [0, 1, 2, 3, 4, 5])
 
         G.add_edge(0, 1)
 
@@ -337,8 +344,9 @@ class TestPercolationImproved(unittest.TestCase):
         self.assertEqual(len(witnesses), len(order_of_additions))
 
         for added_edge, witness in zip(order_of_additions, witnesses):
-            self.assertEqual(witness["missing_edge"], added_edge)
-            self.assertIn(len(witness["vertices"]), [5, 6])
+            self.assertEqual(len(witness), 6)
+            self.assertIn(added_edge[0], witness)
+            self.assertIn(added_edge[1], witness)
 
 
     def test_edge_percolates_in_process(self):
