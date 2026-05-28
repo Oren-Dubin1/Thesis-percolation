@@ -2,11 +2,12 @@ import itertools
 import os
 import random
 import multiprocessing as mp
+
+import networkx
 import numpy as np
 import networkx as nx
 from pathlib import Path
 import subprocess
-
 
 from percolation_improved import Graph
 
@@ -231,5 +232,16 @@ def load_unlabeled_graphs_of_order(n: int, directory="unlabeled_graphs"):
     print(f"Loaded {len(graphs)} unlabeled graphs on {n} vertices")
 
     return graphs
+
+
+if __name__ == '__main__':
+    G = nx.read_edgelist(r'C:\Oren\Academy\Thesis\Thesis-percolation\percolating graphs\n_12\percolating_8.edgelist')
+
+    print(G.number_of_nodes())
+    print(G.number_of_edges())
+    print(Graph(G).is_percolating_slow(print_steps=True, document_steps=True))
+
+
+
 
 
