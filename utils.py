@@ -235,11 +235,14 @@ def load_unlabeled_graphs_of_order(n: int, directory="unlabeled_graphs"):
 
 
 if __name__ == '__main__':
-    G = nx.read_edgelist(r'C:\Oren\Academy\Thesis\Thesis-percolation\percolating graphs\n_12\percolating_8.edgelist')
+    G = nx.read_edgelist(r'C:\Oren\Academy\Thesis\Thesis-percolation\percolating graphs\n_15\percolating_73.edgelist')
 
     print(G.number_of_nodes())
     print(G.number_of_edges())
-    print(Graph(G).is_percolating_slow(print_steps=True, document_steps=True))
+    print(Graph(G).is_percolating(print_steps=True, document_steps=True))
+    # G = nx.complete_multipartite_graph(2,2,2)
+    # G.add_edges_from([('x', 0), ('x', 1), ('y', 0), ('y', 1), ('z', 0), ('z', 2), ('x', 'y'), ('y', 'z'), ('x', 'z')])
+    # print(Graph(G).is_percolating(return_final_graph=True))
 
 
 
