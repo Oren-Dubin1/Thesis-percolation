@@ -110,7 +110,7 @@ class K222MatroidProblem:
         self.kn_edges = kn_edges
         self.edge_to_index = edge_to_index
         self.class_cache = ClassCache(n, reps, kn_edges, edge_to_index)
-        self.prob = pulp.LpProblem("symmetric_polymatroid_rank", pulp.LpMaximize)
+        self.ilp_prob = pulp.LpProblem("symmetric_polymatroid_rank", pulp.LpMaximize)
         self.r = {
             i: pulp.LpVariable(f"r_{i}", lowBound=0, cat=pulp.LpInteger)
             for i in range(len(reps))
@@ -140,7 +140,7 @@ class K222MatroidProblem:
 
     def _add_size_constraints(self):
         for i, G in enumerate(self.reps):
-            self.prob += self.r[i] <= G.number_of_edges()
+            self.ilp_prob += self.r[i] <= G.number_of_edges()
 
     @staticmethod
     def _monotonicity_and_submodularity_worker(args):
@@ -148,7 +148,8 @@ class K222MatroidProblem:
 
         monotonicity_constraints = set()
         submodularity_constraints = set()
-        for g in range(start, end):
+        for G in prob.reps[start: end]:
+            g = graph_to_mask(G, prob.edge_to_index)
             g_id = prob.class_cache[g]
             missing_edges = [1 << e for e in range(prob.m) if not (g & (1 << e))]
             for (i, e_mask) in enumerate(missing_edges):
@@ -169,7 +170,7 @@ class K222MatroidProblem:
         return monotonicity_constraints, submodularity_constraints
 
     def _add_monotonicity_and_submodularity_constraints(self, workers: int):
-        total = 1 << self.m
+        total = len(self.reps)
         chunk_size = int(math.ceil(total / workers))
 
         logger.info(f"Generating monotonicity and submodularity constraints using {workers} workers...")
@@ -194,10 +195,10 @@ class K222MatroidProblem:
 
         r = self.r
         for id_A, id_B in monotonicity_constraints:
-            self.prob += r[id_A] <= r[id_B]
+            self.ilp_prob += r[id_A] <= r[id_B]
 
         for id_Ae, id_Af, id_A, id_Aef in submodularity_constraints:
-            self.prob += r[id_Ae] + r[id_Af] >= r[id_A] + r[id_Aef]
+            self.ilp_prob += r[id_Ae] + r[id_Af] >= r[id_A] + r[id_Aef]
 
     @staticmethod
     def _complete_graph_mask_on_subset(subset, edge_to_index):
@@ -214,12 +215,12 @@ class K222MatroidProblem:
         k5_id = self.class_cache[k5_mask]
 
         # K5 has 10 edges. Circuit means rank exactly 9.
-        self.prob += self.r[k5_id] == 9
+        self.ilp_prob += self.r[k5_id] == 9
 
         for e_idx in range(self.m):
             if (k5_mask >> e_idx) & 1:
                 k5_minus_e = k5_mask ^ (1 << e_idx)
-                self.prob += self.r[self.class_cache[k5_minus_e]] == 9
+                self.ilp_prob += self.r[self.class_cache[k5_minus_e]] == 9
 
     @staticmethod
     def _k222_mask_on_partition(A, B, C, edge_to_index):
@@ -238,16 +239,16 @@ class K222MatroidProblem:
         k222_id = self.class_cache[k222_mask]
 
         # K222 has 12 edges. Circuit means rank exactly 11.
-        self.prob += self.r[k222_id] == 11
+        self.ilp_prob += self.r[k222_id] == 11
 
         for e_idx in range(self.m):
             if (k222_mask >> e_idx) & 1:
                 k222_minus_e = k222_mask ^ (1 << e_idx)
-                self.prob += self.r[self.class_cache[k222_minus_e]] == 11
+                self.ilp_prob += self.r[self.class_cache[k222_minus_e]] == 11
 
         full_mask = (1 << self.m) - 1
         full_id = self.class_cache[full_mask]
-        self.prob += self.r[full_id]
+        self.ilp_prob += self.r[full_id]
 
     def build(self, workers):
         logger.info("Building problem")
@@ -255,12 +256,12 @@ class K222MatroidProblem:
         logger.info("Adding empty graph constraint...")
         empty_mask = 0
         empty_id = self.class_cache[empty_mask]
-        self.prob += self.r[empty_id] == 0
+        self.ilp_prob += self.r[empty_id] == 0
 
         logger.info("Adding size constraints...")
         self._add_size_constraints()
 
-        logger.info("Adding monotonicity and elementary submodularity constraints")
+        logger.info("Adding monotonicity and elementary submodularity constraints...")
         self._add_monotonicity_and_submodularity_constraints(workers)
 
         logger.info("Adding K5 circuit constraints...")
@@ -272,21 +273,28 @@ class K222MatroidProblem:
         logger.info("Adding full graph constraints...")
         full_mask = (1 << self.m) - 1
         full_id = self.class_cache[full_mask]
-        self.prob += self.r[full_id]
+        self.ilp_prob += self.r[full_id]
 
     def load(self):
         pass
 
     def save(self):
+        # for const in self.ilp_prob.constraints():
         pass
 
+
     def solve(self):
-        solver = pulp.HiGHS(msg=False)
+        solver = pulp.HiGHS(
+            msg=True,
+            options={
+                'parallel': 'on',
+            }
+        )
 
         logger.info("Solving...")
-        self.prob.solve(solver)
+        self.ilp_prob.solve(solver)
 
-        logger.debug(f"Status: {pulp.LpStatus[self.prob.status]}")
+        logger.debug(f"Status: {pulp.LpStatus[self.ilp_prob.status]}")
 
         full_mask = (1 << self.m) - 1
         full_id = self.class_cache[full_mask]
