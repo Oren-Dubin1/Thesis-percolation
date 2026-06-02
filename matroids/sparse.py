@@ -367,4 +367,4 @@ def solve_nonsymmetric_highs(n: int, integer=False, add_submodularity=True, num_
 
 
 if __name__ == "__main__":
-    solve_nonsymmetric_highs(n=6, integer=True, add_submodularity=True)
+    solve_nonsymmetric_highs(n=8, integer=True, add_submodularity=True)
