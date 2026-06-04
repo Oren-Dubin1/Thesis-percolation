@@ -1,6 +1,8 @@
 import itertools
 import networkx as nx
 import numpy as np
+from tqdm import tqdm
+
 from Graphs import PercolationGraph
 from networkx.algorithms import isomorphism as iso
 import os
@@ -421,7 +423,8 @@ class Graph:
     def is_percolating(self,
                       print_steps=False,
                       return_final_graph=False,
-                      document_steps=False) -> ReturnTypePercolation:
+                      document_steps=False,
+                       progress_bar=False) -> ReturnTypePercolation:
         """
         Faster k222 percolation check using repeated subgraph matching to K222 minus one edge.
 
@@ -446,6 +449,11 @@ class Graph:
         order_of_additions = []
         witnesses = []
 
+        pbar = None
+        if progress_bar:
+            max_additions = self.n * (self.n - 1) // 2 - self.graph.number_of_edges()
+            pbar = tqdm(total=max_additions, desc="Percolation")
+
         while True:
             mapping, missing_edge = get_k222_subgraph_mapping(self.graph)
             if mapping is None:
@@ -454,13 +462,18 @@ class Graph:
             u, v = mapping[missing_edge[0]], mapping[missing_edge[1]]
             self.graph.add_edge(u, v)
 
+            if pbar is not None:
+                pbar.update(1)
+
             if print_steps:
                 print(f"Added edge ({u}, {v}) for fast percolation.")
 
             if document_steps:
                 order_of_additions.append((u, v))
-                # Store the matched 6-tuple (pattern node -> graph node) as witness.
                 witnesses.append(tuple(mapping[i] for i in range(6)))
+
+        if pbar is not None:
+            pbar.close()
 
         percolated = self.graph.number_of_edges() == \
                      self.graph.number_of_nodes() * (self.graph.number_of_nodes() - 1) // 2
