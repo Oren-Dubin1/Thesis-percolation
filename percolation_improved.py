@@ -437,6 +437,9 @@ class Graph:
             (percolated, final_graph, order_of_additions, witnesses) when document_steps=True.
         document_steps : bool
             If True, return addition order and match witnesses.
+        progress_bar : bool
+            If True, display tqdm progress bar.
+            Assumes the graph percolates - for estimation.
 
         Returns
         -------
