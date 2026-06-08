@@ -28,19 +28,11 @@ def constraint_to_expression(constraint):
         add_term(expr, constraint["large_mask"], -1)
         return dict(expr), 0.0, "<="
 
-    if t == "K5":
+    if t in {"K5", "K5_minus_edge"}:
         add_term(expr, constraint["mask"], 1)
         return dict(expr), 9.0, "="
 
-    if t == "K5_minus_edge":
-        add_term(expr, constraint["mask"], 1)
-        return dict(expr), 9.0, "="
-
-    if t == "K222":
-        add_term(expr, constraint["mask"], 1)
-        return dict(expr), 11.0, "="
-
-    if t == "K222_minus_edge":
+    if t in {"K222", "K222_minus_edge"}:
         add_term(expr, constraint["mask"], 1)
         return dict(expr), 11.0, "="
 
@@ -54,7 +46,7 @@ def constraint_to_expression(constraint):
     raise ValueError(f"Unknown constraint type: {t}")
 
 
-def check_one_convention(cert, n, claimed_bound, row_sign, col_sign, target_sign, eps):
+def check_one_convention(cert, n, row_sign, col_sign, target_sign, eps):
     lhs = defaultdict(float)
     rhs = 0.0
 
@@ -72,8 +64,8 @@ def check_one_convention(cert, n, claimed_bound, row_sign, col_sign, target_sign
 
         lhs[mask] += y
 
-        # If coefficient is positive, use r(G) <= upper.
-        # If coefficient is negative, use r(G) >= 0, giving RHS 0.
+        # Positive coefficient uses r(G) <= upper.
+        # Negative coefficient uses r(G) >= 0, so contributes 0 to RHS.
         if y > 0:
             rhs += y * upper
 
@@ -86,9 +78,7 @@ def check_one_convention(cert, n, claimed_bound, row_sign, col_sign, target_sign
         if abs(lhs.get(var, 0.0) - target.get(var, 0.0)) > eps
     }
 
-    rhs_error = rhs - claimed_bound if target_sign == 1 else rhs + claimed_bound
-
-    return residual, rhs, rhs_error
+    return residual, rhs
 
 
 def verify_combined_certificate(combined_certificate_file, n, claimed_bound, eps=1e-6):
@@ -100,33 +90,45 @@ def verify_combined_certificate(combined_certificate_file, n, claimed_bound, eps
     for row_sign in [1, -1]:
         for col_sign in [1, -1]:
             for target_sign in [1, -1]:
-                residual, rhs, rhs_error = check_one_convention(
+                residual, rhs = check_one_convention(
                     cert=cert,
                     n=n,
-                    claimed_bound=claimed_bound,
                     row_sign=row_sign,
                     col_sign=col_sign,
                     target_sign=target_sign,
                     eps=eps,
                 )
 
-                score = (len(residual), abs(rhs_error))
+                is_upper_bound = target_sign == 1
+                rhs_gap = rhs - claimed_bound if is_upper_bound else float("inf")
+
+                # Prefer exact identity, then upper-bound conventions, then smaller valid upper bound.
+                score = (
+                    len(residual),
+                    0 if is_upper_bound else 1,
+                    abs(rhs_gap) if is_upper_bound else float("inf"),
+                )
 
                 if best is None or score < best[0]:
-                    best = (score, row_sign, col_sign, target_sign, residual, rhs, rhs_error)
+                    best = (score, row_sign, col_sign, target_sign, residual, rhs, is_upper_bound, rhs_gap)
 
-    score, row_sign, col_sign, target_sign, residual, rhs, rhs_error = best
-    passed = len(residual) == 0 and abs(rhs_error) <= eps
+    score, row_sign, col_sign, target_sign, residual, rhs, is_upper_bound, rhs_gap = best
+
+    # This only accepts certificates proving r(K_n) <= rhs.
+    # If the true optimum is 15, then rhs=16 is acceptable, rhs=14 is not.
+    bound_is_good = is_upper_bound and rhs + eps <= claimed_bound
+    passed = len(residual) == 0 and bound_is_good
 
     print("Certificate:", combined_certificate_file)
     print("n:", n)
     print("Objective mask:", full_mask(n))
-    print("Claimed bound:", claimed_bound)
+    print("Claimed primal optimum/lower reference:", claimed_bound)
     print("Best row_sign:", row_sign)
     print("Best col_sign:", col_sign)
     print("Best target_sign:", target_sign)
-    print("Computed RHS:", rhs)
-    print("RHS error:", rhs_error)
+    print("Is upper bound:", is_upper_bound)
+    print("Computed upper bound:", rhs if is_upper_bound else "not an upper bound")
+    print("Gap above claimed optimum:", rhs_gap if is_upper_bound else None)
     print("Residual variables:", len(residual))
     print("PASSED:", passed)
 
@@ -140,8 +142,8 @@ def verify_combined_certificate(combined_certificate_file, n, claimed_bound, eps
 
 if __name__ == "__main__":
     verify_combined_certificate(
-        combined_certificate_file=r"C:\Oren\Academy\Thesis\Thesis-percolation\matroids\dual_output\certificate_n6\combined_certificate.json",
-        n=6,
-        claimed_bound=12,
+        combined_certificate_file=r"C:\Oren\Academy\Thesis\Thesis-percolation\matroids\dual_output\certificate_n7\combined_certificate.json",
+        n=7,
+        claimed_bound=16,
         eps=1e-6,
     )
