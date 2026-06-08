@@ -231,10 +231,9 @@ def solve_lp_and_save_duals(filename, out_dir=None, eps=1e-8):
     out_dir.mkdir(parents=True, exist_ok=True)
 
     h = highspy.Highs()
-    h.setOptionValue("output_flag", True)
-    h.setOptionValue("threads", 4)
-    h.setOptionValue("solver", "ipm")
-    h.setOptionValue("simplex_strategy", 1)
+    h.setOptionValue("solver", "simplex")
+    h.setOptionValue("run_crossover", "off")
+    h.setOptionValue("ipx_dualize_strategy", 0)
 
     print("Reading file...")
     status = h.readModel(str(filename))
@@ -311,7 +310,7 @@ def combine_constraint_masks_and_duals(constraint_masks_file, variable_masks_fil
 
 
 if __name__ == "__main__":
-    n = 6
+    n = 8
     # filename, constraint_masks_filename, variable_masks_filename = write_symmetric_lp(n=n, integer=False)
     filename = symmetric_lp_filename(n=n, integer=False)
     constraint_masks_filename = str(filename) + ".constraint_masks.json"
