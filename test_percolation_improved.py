@@ -367,6 +367,319 @@ class TestPercolationImproved(unittest.TestCase):
             pass  # Test passes if exception is raised
 
 
+def complete_minus(n, missing_edges):
+    G = nx.complete_graph(n)
+    G.remove_edges_from(missing_edges)
+    return G
+
+
+def same_edges(G, H):
+    return set(map(frozenset, G.edges())) == set(map(frozenset, H.edges()))
+
+
+class TestKrSubgraphMapping(unittest.TestCase):
+    def test_finds_k3_minus_edge(self):
+        G = nx.Graph()
+        G.add_edges_from([(0, 1), (1, 2)])
+
+        mapping, missing_edge = get_kr_subgraph_mapping(G, r=3)
+
+        self.assertIsNotNone(mapping)
+        u, v = mapping[missing_edge[0]], mapping[missing_edge[1]]
+        self.assertFalse(G.has_edge(u, v))
+        self.assertEqual({u, v}, {0, 2})
+
+    def test_finds_k5_minus_edge(self):
+        G = complete_minus(5, [(0, 4)])
+
+        mapping, missing_edge = get_kr_subgraph_mapping(G, r=5)
+
+        self.assertIsNotNone(mapping)
+        u, v = mapping[missing_edge[0]], mapping[missing_edge[1]]
+        self.assertFalse(G.has_edge(u, v))
+        self.assertEqual({u, v}, {0, 4})
+
+    def test_returns_none_when_no_witness(self):
+        G = nx.empty_graph(5)
+
+        mapping, missing_edge = get_kr_subgraph_mapping(G, r=5)
+
+        self.assertIsNone(mapping)
+        self.assertEqual(missing_edge, (0, 1))
+
+
+class TestKrPercolation(unittest.TestCase):
+    def test_k3_path_on_three_vertices_percolates(self):
+        G = nx.path_graph(3)
+
+        graph = Graph(G)
+
+        self.assertTrue(graph.is_kr_percolating(r=3))
+
+    def test_k3_path_on_four_vertices_percolates_to_k4(self):
+        G = nx.path_graph(4)
+
+        graph = Graph(G)
+        percolated, final_graph = graph.is_kr_percolating(r=3, return_final_graph=True)
+
+        self.assertTrue(percolated)
+        self.assertEqual(final_graph.number_of_edges(), 6)
+        self.assertTrue(nx.is_isomorphic(final_graph, nx.complete_graph(4)))
+
+    def test_k3_matching_does_not_percolate(self):
+        G = nx.Graph()
+        G.add_nodes_from(range(4))
+        G.add_edges_from([(0, 1), (2, 3)])
+
+        graph = Graph(G)
+
+        self.assertFalse(graph.is_kr_percolating(r=3))
+
+    def test_k4_single_missing_edge_percolates(self):
+        G = complete_minus(4, [(0, 1)])
+
+        graph = Graph(G)
+
+        self.assertTrue(graph.is_kr_percolating(r=4))
+
+    def test_k4_two_missing_edges_does_not_percolate(self):
+        G = complete_minus(4, [(0, 1), (2, 3)])
+
+        graph = Graph(G)
+
+        self.assertFalse(graph.is_kr_percolating(r=4))
+
+    def test_k5_single_missing_edge_percolates(self):
+        G = complete_minus(5, [(2, 4)])
+
+        graph = Graph(G)
+
+        self.assertTrue(graph.is_kr_percolating(r=5))
+
+    def test_k5_two_missing_edges_inside_same_k5_does_not_percolate(self):
+        G = complete_minus(5, [(0, 1), (2, 3)])
+
+        graph = Graph(G)
+
+        self.assertFalse(graph.is_kr_percolating(r=5))
+
+    def test_k5_percolation_on_six_vertices_one_forced_edge(self):
+        G = nx.complete_graph(6)
+        G.remove_edge(0, 5)
+
+        graph = Graph(G)
+        percolated, final_graph, order, witnesses = graph.is_kr_percolating(r=5, return_final_graph=True, document_steps=True)
+
+        self.assertTrue(percolated)
+        self.assertTrue(nx.is_isomorphic(final_graph, nx.complete_graph(6)))
+        self.assertEqual(len(order), 1)
+        self.assertEqual(set(order[0]), {0, 5})
+        self.assertEqual(len(witnesses), 1)
+        self.assertIn(0, witnesses[0])
+        self.assertIn(5, witnesses[0])
+
+    def test_complete_graph_is_already_percolating(self):
+        G = nx.complete_graph(8)
+
+        graph = Graph(G)
+        percolated, order, witnesses = graph.is_kr_percolating(r=5, document_steps=True)
+
+        self.assertTrue(percolated)
+        self.assertEqual(order, [])
+        self.assertEqual(witnesses, [])
+
+    def test_empty_graph_is_not_percolating(self):
+        G = nx.empty_graph(8)
+
+        graph = Graph(G)
+
+        self.assertFalse(graph.is_kr_percolating(r=5))
+
+    def test_graph_with_less_than_r_vertices_raises(self):
+        G = nx.complete_graph(4)
+
+        graph = Graph(G)
+
+        with self.assertRaises(ValueError):
+            graph.is_kr_percolating(r=5)
+
+    def test_original_graph_is_restored_after_success(self):
+        G = complete_minus(5, [(0, 1)])
+        original = G.copy()
+
+        graph = Graph(G)
+
+        self.assertTrue(graph.is_kr_percolating(r=5))
+        self.assertTrue(same_edges(graph.graph, original))
+
+    def test_original_graph_is_restored_after_failure(self):
+        G = nx.empty_graph(5)
+        original = G.copy()
+
+        graph = Graph(G)
+
+        self.assertFalse(graph.is_kr_percolating(r=5))
+        self.assertTrue(same_edges(graph.graph, original))
+
+    def test_return_final_graph_does_not_mutate_current_graph(self):
+        G = complete_minus(5, [(0, 1)])
+        original = G.copy()
+
+        graph = Graph(G)
+        percolated, final_graph = graph.is_kr_percolating(r=5, return_final_graph=True)
+
+        self.assertTrue(percolated)
+        self.assertTrue(final_graph.has_edge(0, 1))
+        self.assertTrue(same_edges(graph.graph, original))
+
+    def test_document_steps_records_added_edges_and_witnesses(self):
+        G = complete_minus(5, [(0, 1)])
+
+        graph = Graph(G)
+        percolated, order, witnesses = graph.is_kr_percolating(r=5, document_steps=True)
+
+        self.assertTrue(percolated)
+        self.assertEqual(len(order), 1)
+        self.assertEqual(set(order[0]), {0, 1})
+        self.assertEqual(len(witnesses), 1)
+        self.assertEqual(set(witnesses[0]), set(range(5)))
+
+    def test_return_final_graph_and_document_steps_together(self):
+        G = complete_minus(5, [(0, 1)])
+
+        graph = Graph(G)
+        percolated, final_graph, order, witnesses = graph.is_kr_percolating(r=5, return_final_graph=True, document_steps=True)
+
+        self.assertTrue(percolated)
+        self.assertTrue(final_graph.has_edge(0, 1))
+        self.assertEqual(len(order), 1)
+        self.assertEqual(set(order[0]), {0, 1})
+        self.assertEqual(len(witnesses), 1)
+        self.assertEqual(set(witnesses[0]), set(range(5)))
+
+    def test_is_k5_percolating_wrapper_matches_is_kr_percolating(self):
+        G = complete_minus(5, [(1, 3)])
+
+        graph1 = Graph(G)
+        graph2 = Graph(G)
+
+        self.assertEqual(graph1.is_k5_percolating(), graph2.is_kr_percolating(r=5))
+
+    def test_k5_wrapper_return_final_graph(self):
+        G = complete_minus(5, [(1, 3)])
+
+        graph = Graph(G)
+        percolated, final_graph = graph.is_k5_percolating(return_final_graph=True)
+
+        self.assertTrue(percolated)
+        self.assertTrue(final_graph.has_edge(1, 3))
+        self.assertTrue(nx.is_isomorphic(final_graph, nx.complete_graph(5)))
+
+    def test_labels_need_not_be_zero_to_n_minus_one(self):
+        G = nx.complete_graph(["a", "b", "c", "d", "e"])
+        G.remove_edge("a", "e")
+
+        graph = Graph(G)
+        percolated, final_graph, order, witnesses = graph.is_kr_percolating(r=5, return_final_graph=True, document_steps=True)
+
+        self.assertTrue(percolated)
+        self.assertTrue(final_graph.has_edge("a", "e"))
+        self.assertEqual(len(order), 1)
+        self.assertEqual(set(order[0]), {"a", "e"})
+        self.assertEqual(set(witnesses[0]), {"a", "b", "c", "d", "e"})
+
+    def test_isolated_vertex_completed_if_forced_later(self):
+        G = nx.complete_graph(5)
+        G.add_node(5)
+        G.add_edges_from([(1, 5), (2, 5), (3, 5), (4, 5)])
+
+        graph = Graph(G)
+        percolated, final_graph, order, witnesses = graph.is_kr_percolating(r=5, return_final_graph=True, document_steps=True)
+
+        self.assertTrue(percolated)
+        self.assertEqual(final_graph.number_of_edges(), 15)
+        self.assertTrue(nx.is_isomorphic(final_graph, nx.complete_graph(6)))
+        self.assertEqual(len(order), 1)
+        self.assertEqual(set(order[0]), {0, 5})
+
+    def test_two_step_k5_percolation(self):
+        G = nx.complete_graph(6)
+        G.remove_edges_from([(0, 5), (1, 5)])
+
+        graph = Graph(G)
+        percolated, final_graph, order, witnesses = graph.is_kr_percolating(r=5, return_final_graph=True, document_steps=True)
+
+        self.assertTrue(percolated)
+        self.assertTrue(nx.is_isomorphic(final_graph, nx.complete_graph(6)))
+        self.assertEqual(len(order), 2)
+        self.assertEqual({frozenset(e) for e in order}, {frozenset((0, 5)), frozenset((1, 5))})
+        self.assertTrue(all(len(w) == 5 for w in witnesses))
+
+    def test_k5_process_stops_before_complete_when_no_more_witnesses(self):
+        G = nx.complete_graph(6)
+        G.remove_edges_from([(0, 5), (1, 5), (2, 5)])
+
+        graph = Graph(G)
+        percolated, final_graph, order, witnesses = graph.is_kr_percolating(r=5, return_final_graph=True, document_steps=True)
+
+        self.assertFalse(percolated)
+        self.assertLess(final_graph.number_of_edges(), 15)
+        self.assertEqual(order, [])
+        self.assertEqual(witnesses, [])
+
+    def test_print_steps_does_not_change_result(self):
+        G = complete_minus(5, [(0, 1)])
+
+        graph = Graph(G)
+
+        self.assertTrue(graph.is_kr_percolating(r=5, print_steps=True))
+
+    def test_percolation_order_edges_are_non_edges_at_time_of_addition(self):
+        G = nx.complete_graph(6)
+        G.remove_edges_from([(0, 5), (1, 5)])
+
+        graph = Graph(G)
+        percolated, order, witnesses = graph.is_kr_percolating(r=5, document_steps=True)
+
+        H = G.copy()
+        for u, v in order:
+            self.assertFalse(H.has_edge(u, v))
+            H.add_edge(u, v)
+
+        self.assertTrue(percolated)
+        self.assertEqual(H.number_of_edges(), 15)
+
+    def test_each_documented_witness_is_kr_minus_edge_before_addition(self):
+        G = nx.complete_graph(6)
+        G.remove_edges_from([(0, 5), (1, 5)])
+
+        graph = Graph(G)
+        percolated, order, witnesses = graph.is_kr_percolating(r=5, document_steps=True)
+
+        H = G.copy()
+        for edge, witness in zip(order, witnesses):
+            self.assertEqual(len(witness), 5)
+            self.assertEqual(H.subgraph(witness).number_of_edges(), 9)
+            self.assertTrue(set(edge).issubset(set(witness)))
+            self.assertFalse(H.has_edge(*edge))
+            H.add_edge(*edge)
+
+        self.assertTrue(percolated)
+
+    def test_k6_single_missing_edge_percolates(self):
+        G = complete_minus(6, [(0, 1)])
+
+        graph = Graph(G)
+
+        self.assertTrue(graph.is_kr_percolating(r=6))
+
+    def test_k6_two_missing_edges_does_not_percolate(self):
+        G = complete_minus(6, [(0, 1), (2, 3)])
+
+        graph = Graph(G)
+
+        self.assertFalse(graph.is_kr_percolating(r=6))
+
 
 if __name__ == '__main__':
     unittest.main()

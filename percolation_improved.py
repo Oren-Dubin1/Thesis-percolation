@@ -45,6 +45,13 @@ def get_k222_subgraph_mapping(G):
 
     return None, None
 
+def get_kr_subgraph_mapping(G, r):
+    H = nx.complete_graph(r)
+    missing_edge = (0, 1)
+    H.remove_edge(*missing_edge)
+
+    return get_subgraph_mapping(G, H), missing_edge
+
 def save_graph_to_json(graph, path='graph.json'):
     data = json_graph.node_link_data(graph)
     with open(path, "w") as f:
@@ -192,14 +199,14 @@ def run_percolation_experiments(n=None,
             fname = f"percolating_{p_fname}_2.edgelist"
             path = os.path.join(output_dir, fname)
             nx.write_edgelist(graph.original_graph, path, data=False)
-            summary = (f'{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | attempts={attempts} | '
+            summary = (f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | attempts={attempts} | "
                        f'nodes={graph.graph.number_of_nodes()} edges={graph.graph.number_of_edges()} '
                        f'| file={fname}\n')
             results.append({'attempts': attempts, 'file': path})
             count_percolated += 1
             print(f' Percolated and saved graph. Total percolated so far: {count_percolated}')
         else:
-            summary = (f'{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | attempts={attempts} | '
+            summary = (f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | attempts={attempts} | "
                        f'FAILED to percolate within {max_tries} attempts\n')
             results.append({'attempts': attempts, 'file': None})
 
@@ -638,6 +645,66 @@ class Graph:
                 return percolated, final_graph, order_of_additions, witnesses
             return percolated, final_graph
         # Restore original graph and helper matrix
+        self.restore_graph()
+        if document_steps:
+            return percolated, order_of_additions, witnesses
+        return percolated
+
+
+    def is_kr_percolating(self,
+                          r,
+                          print_steps=False,
+                          return_final_graph=False,
+                          document_steps=False,
+                          progress_bar=False):
+        if self.n < r:
+            raise ValueError(f"Graph must have at least {r} vertices to check for K_{r} percolation.")
+
+        order_of_additions = []
+        witnesses = []
+
+        target_edges = self.n * (self.n - 1) // 2
+
+        pbar = None
+        if progress_bar:
+            max_additions = target_edges - self.graph.number_of_edges()
+            pbar = tqdm(total=max_additions, desc=f"K_{r} percolation")
+
+        while True:
+            mapping, missing_edge = get_kr_subgraph_mapping(self.graph, r)
+            if mapping is None:
+                break
+
+            u = mapping[missing_edge[0]]
+            v = mapping[missing_edge[1]]
+
+            if self.graph.has_edge(u, v):
+                raise RuntimeError("Invalid K_r-minus-edge witness: missing edge already exists.")
+
+            self.graph.add_edge(u, v)
+
+            if pbar is not None:
+                pbar.update(1)
+
+            if print_steps:
+                print(f"Added edge ({u}, {v}) for K_{r} percolation.")
+
+            if document_steps:
+                order_of_additions.append((u, v))
+                witnesses.append(tuple(mapping[i] for i in range(r)))
+
+        if pbar is not None:
+            pbar.close()
+
+        percolated = self.graph.number_of_edges() == target_edges
+
+        if return_final_graph:
+            final_graph = self.graph.copy()
+            self.restore_graph()
+            if document_steps:
+                return percolated, final_graph, order_of_additions, witnesses
+            return percolated, final_graph
+
         self.restore_graph()
         if document_steps:
             return percolated, order_of_additions, witnesses
