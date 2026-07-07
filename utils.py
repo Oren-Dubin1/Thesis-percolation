@@ -1,14 +1,23 @@
 import itertools
 import os
+import itertools
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from tqdm import tqdm
 import random
 import multiprocessing as mp
-
+import networkx as nx
+from itertools import combinations
 import networkx
 import numpy as np
-import networkx as nx
 from pathlib import Path
 import subprocess
-
+from itertools import combinations
+from coloring import optimal_coloring
+from concurrent.futures import ProcessPoolExecutor
+from tqdm import tqdm
+import os
+import gcol
+from minorminer import find_embedding
 from percolation_improved import Graph
 
 
@@ -174,37 +183,36 @@ def check_edge_with_resistance_at_least_5_12(n : int):
 
 
 
-def save_unlabeled_graphs_up_to_n(max_n=9, out_dir="unlabeled_graphs"):
+def save_unlabeled_graphs_n(n=9, out_dir="unlabeled_graphs"):
     out_dir = Path(out_dir)
     out_dir.mkdir(exist_ok=True)
 
-    for n in range(1, max_n + 1):
-        out_path = out_dir / f"unlabeled_graphs_n{n}.g6"
+    out_path = out_dir / f"unlabeled_graphs_n{n}.g6"
 
-        print(f"Generating n={n} -> {out_path}")
+    print(f"Generating n={n} -> {out_path}")
 
-        result = subprocess.run(
-            ["wsl", "nauty-geng", str(n)],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
+    result = subprocess.run(
+        ["wsl", "nauty-geng", str(n)],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
 
-        lines = []
+    lines = []
 
-        for line in result.stdout.splitlines():
-            line = line.strip()
+    for line in result.stdout.splitlines():
+        line = line.strip()
 
-            if not line or line.startswith(">"):
-                continue
+        if not line or line.startswith(">"):
+            continue
 
-            lines.append(line)
+        lines.append(line)
 
-        with open(out_path, "w") as f:
-            for line in lines:
-                f.write(line + "\n")
+    with open(out_path, "w") as f:
+        for line in lines:
+            f.write(line + "\n")
 
-        print(f"Saved {len(lines)} graphs")
+    print(f"Saved {len(lines)} graphs")
 
 
 def load_unlabeled_graphs_of_order(n: int, directory="unlabeled_graphs"):
@@ -234,17 +242,213 @@ def load_unlabeled_graphs_of_order(n: int, directory="unlabeled_graphs"):
     return graphs
 
 
-if __name__ == '__main__':
-    G = nx.read_edgelist(r'C:\Oren\Academy\Thesis\Thesis-percolation\percolating graphs\n_15\percolating_73.edgelist')
+def add_edge_forcing_gadget(G, edge, idx):
+    u, v = edge
+    base = [1, 2, 3, 4, 5]
 
-    print(G.number_of_nodes())
-    print(G.number_of_edges())
-    print(Graph(G).is_percolating(print_steps=True, document_steps=True))
-    # G = nx.complete_multipartite_graph(2,2,2)
-    # G.add_edges_from([('x', 0), ('x', 1), ('y', 0), ('y', 1), ('z', 0), ('z', 2), ('x', 'y'), ('y', 'z'), ('x', 'z')])
-    # print(Graph(G).is_percolating(return_final_graph=True))
+    # choose a third base vertex to play the role of "2" in the original gadget
+    w = next(x for x in base if x not in {u, v})
+
+    a = f"g{idx}_a"
+    b = f"g{idx}_b"
+    c = f"g{idx}_c"
+    d = f"g{idx}_d"
+
+    G.add_nodes_from([a, b, c, d])
+
+    # K4 on a,b,c,d
+    G.add_edges_from(combinations([a, b, c, d], 2))
+
+    # relabeled version of:
+    # (a,1), (a,2), (b,1), (c,3), (d,1), (d,3)
+    # with 1 -> u and 3 -> v
+    G.add_edges_from([
+        (a, u),
+        (a, w),
+        (b, u),
+        (c, v),
+        (d, u),
+        (d, v),
+    ])
 
 
+def build_shared_K5_with_all_edge_gadgets(add_base_K5=True):
+    G = nx.Graph()
+
+    base = [1, 2, 3, 4, 5]
+    G.add_nodes_from(base)
+
+    if add_base_K5:
+        G.add_edges_from(combinations(base, 2))
+
+    for idx, edge in enumerate(combinations(base, 2)):
+        add_edge_forcing_gadget(G, edge, idx)
+
+    return G
+
+def check_edge_not_percolating(args):
+    G, edge = args
+
+    H = G.copy()
+    H.remove_edge(*edge)
+
+    return edge, not Graph(H).is_percolating(progress_bar=True)
+
+
+def assert_all_base_edges_critical_parallel(G, max_workers=None):
+    edges = list(itertools.combinations([1, 2, 3, 4, 5], 2))
+
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        futures = [
+            executor.submit(check_edge_not_percolating, (G, edge))
+            for edge in edges
+        ]
+
+        for future in tqdm(as_completed(futures), total=len(futures), desc="Checking edges"):
+            edge, ok = future.result()
+            assert ok, f"Removing edge {edge} still percolates"
+
+    return True
+
+
+def iter_min_3_rigid_graphs(order: int, folder: str='minimally 3 rigid graphs'):
+    path = os.path.join(folder, f"MinRigidGraphsD3V{order}.g6")
+
+    with open(path) as f:
+        for line in f:
+            yield nx.from_graph6_bytes(line.strip().encode())
+
+
+
+import networkx as nx
+import gcol
+from concurrent.futures import ProcessPoolExecutor
+from tqdm import tqdm
+
+
+def graph6_path(order):
+    return f"minimally 3 rigid graphs/MinRigidGraphsD3V{order}.g6"
+
+
+def count_graph6_lines(order):
+    path = graph6_path(order)
+
+    with open(path, "rb") as f:
+        return sum(1 for line in f if line.strip())
+
+
+def iter_graph6_lines(order):
+    path = graph6_path(order)
+
+    with open(path, "rb") as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                yield line
+
+
+def chromatic_number_from_graph6(line):
+    g = nx.from_graph6_bytes(line)
+    num = gcol.chromatic_number(g)
+
+    if num > 5:
+        edges = list(g.edges())
+        raise RuntimeError(
+            f"Found a graph with chromatic number {num} > 5.\n"
+            f"Edges: {edges}"
+        )
+
+    return num
+
+
+def check_chromatic_number_rigid_graphs_order(order, workers=None):
+    total = count_graph6_lines(order)
+    max_color = -1
+
+    graph_lines = iter_graph6_lines(order)
+
+    with ProcessPoolExecutor(max_workers=workers) as executor:
+        results = executor.map(chromatic_number_from_graph6, graph_lines, chunksize= 1 << 12)
+
+        for num in tqdm(results, total=total, desc=f"order {order}", unit="graphs"):
+            max_color = max(max_color, num)
+
+    print(f"Maximum chromatic number for order {order}: {max_color}")
+    return max_color
+
+
+def check_chromatic_number_rigid_graphs(workers=None):
+    results = {}
+
+    for order in range(11, 12):
+        results[order] = check_chromatic_number_rigid_graphs_order(order=order, workers=workers)
+
+    return results
+
+
+def e_i(G: nx.Graph, i: int) -> int:
+    """
+    Computes
+
+        e_i = min_{|S|=i} |E(G) \\ E(G \\ S)| - 1
+
+    Parameters
+    ----------
+    G : networkx.Graph
+    i : int
+
+    Returns
+    -------
+    int
+    """
+    n = G.number_of_nodes()
+    if not (0 <= i <= n):
+        raise ValueError("i must satisfy 0 <= i <= |V|")
+
+    nodes = list(G.nodes())
+    best = float("inf")
+
+    for S in itertools.combinations(nodes, i):
+        S = set(S)
+
+        boundary = sum(
+            1
+            for u, v in G.edges()
+            if u in S or v in S
+        )
+
+        best = min(best, boundary)
+
+    return best - 1
+
+def is_minor_of(G, H) -> bool:
+    """
+    Returns True iff H is a minor of G
+    :param G: nx.Graph
+    :param H: nx.Graph
+    """
+
+    return find_embedding(H.edges(), G) != {}
+
+if __name__ == "__main__":
+    G = nx.complete_graph(9)
+
+    missing_edges = [
+        (0, 2),
+        (0, 3),
+        (0, 8),
+        (1, 6),
+        (1, 8),
+        (2, 8),
+        (3, 5),
+        (4, 6),
+        (4, 8),
+        (6, 7),
+    ]
+
+    G.remove_edges_from(missing_edges)
+    print(Graph(G).is_kr_percolating(r=6))
+    print(is_minor_of(G, nx.complete_graph(7)))
 
 
 
